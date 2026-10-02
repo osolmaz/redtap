@@ -76,6 +76,17 @@ export function createApp(config: Config, log: BucketLog, store?: RecordStore) {
     return c.json({ seen: seen.size, segments: await log.totalRecords() });
   });
 
+  let controlCache: { at: number; doc: Record<string, unknown> | null } = { at: 0, doc: null };
+  app.get("/api/control", async (c) => {
+    if (!authorized(c.req.header("authorization"))) {
+      return c.json({ error: "invalid or missing pool token" }, 401);
+    }
+    if (Date.now() - controlCache.at > 30_000) {
+      controlCache = { at: Date.now(), doc: await log.readControl() };
+    }
+    return c.json(controlCache.doc ?? {});
+  });
+
   app.post("/api/ingest", async (c) => {
     if (!authorized(c.req.header("authorization"))) {
       return c.json({ error: "invalid or missing pool token" }, 401);

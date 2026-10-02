@@ -31,6 +31,7 @@ export type BucketLog = Readonly<{
   }>;
   saveSeen: (seen: Set<string>) => Promise<void>;
   totalRecords: () => Promise<number>;
+  readControl: () => Promise<Record<string, unknown> | null>;
 }>;
 
 let sequence = 0;
@@ -101,5 +102,16 @@ export async function openBucketLog(hubArgs: {
     return total;
   };
 
-  return { loadSeen, appendSegment, saveSeen, totalRecords };
+  const readControl = async (): Promise<Record<string, unknown> | null> => {
+    try {
+      const blob = await downloadFile({ repo: REPO, accessToken: hub.accessToken, path: "control/instructions.json", xet: false });
+      if (blob === null) return null;
+      const parsed = JSON.parse(await blob.text());
+      return parsed && typeof parsed === "object" ? (parsed as Record<string, unknown>) : null;
+    } catch {
+      return null;
+    }
+  };
+
+  return { loadSeen, appendSegment, saveSeen, totalRecords, readControl };
 }

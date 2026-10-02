@@ -3,6 +3,7 @@
 import { canonical, observationId, postKey, postsFromApiPayload, recordFromApiPost, shouldSampleUnchanged } from './lib/observations.js';
 import { admitRecords, flushNowNow, initPoolSync, setConfig, statusSnapshot } from './lib/pool-sync.js';
 import { NetworkCapture } from './lib/network-capture.js';
+import { CONTROL_ALARM, initControl } from './lib/control.js';
 
 const EXPORT_BATCH_LIMIT = 5000;
 
@@ -266,6 +267,13 @@ void (async () => {
   } catch {}
 })();
 
+initControl({
+  getConfig: async () => {
+    const bag = await chrome.storage.local.get(['poolUrl', 'poolToken']);
+    return { poolUrl: bag.poolUrl ?? '', poolToken: bag.poolToken ?? '' };
+  },
+});
+
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message?.type !== 'redtap:capture') return;
   (async () => {
@@ -316,7 +324,7 @@ networkCapture.attach();
 
 // ------------------------------------------------------- body enrichment
 
-const BODY_FETCH_DELAY_MS = 4000;
+const BODY_FETCH_DELAY_MS = 1500;
 const BODY_QUEUE_MAX = 500;
 const bodyQueue = [];
 const bodyFailed = new Set();
