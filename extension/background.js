@@ -69,7 +69,7 @@ function sendObservations(port, run, records) {
     observedAtMs: Date.now(),
     postAt: record.post_at ?? '',
     sourceEndpoint: record.source_endpoint ?? '',
-    postId: record.post_id,
+    tweetId: record.post_id,
     captureSequence: run.nextCaptureSequence++,
     runId: run.runId,
     sourceTabId: run.sourceTabId,
@@ -108,7 +108,7 @@ chrome.runtime.onConnectExternal.addListener((port) => {
         type: 'scrape:opened',
         protocolVersion: SCRAPE_PROTOCOL_VERSION,
         runId: run.runId,
-        run: { ...run, leaseExpiresAtMs: Date.now() + 60_000 },
+        run: { ...run, leaseExpiresAtMs: Date.now() + 60_000, protocolVersion: SCRAPE_PROTOCOL_VERSION },
         capabilities: ['typed-errors', 'run-leases'],
         observations: [],
       });
