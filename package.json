@@ -1,0 +1,10 @@
+{
+  "name": "redtap",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Passively captures Reddit posts as you browse and saves them locally as JSONL, along the lines of xTap",
+  "scripts": {
+    "test": "node --test tests/observations.test.mjs"
+  }
+}

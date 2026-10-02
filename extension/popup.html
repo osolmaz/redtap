@@ -1,0 +1,22 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <style>
+      body { font: 13px/1.4 system-ui, sans-serif; width: 260px; margin: 0; padding: 12px; }
+      h1 { font-size: 14px; margin: 0 0 8px; }
+      .row { display: flex; justify-content: space-between; margin: 4px 0; color: #444; }
+      button { margin-top: 10px; width: 100%; padding: 6px; border: 1px solid #ccc; border-radius: 6px; background: #fff; cursor: pointer; }
+      button:hover { background: #f2f2f2; }
+      .status { color: #060; min-height: 1.2em; margin-top: 6px; }
+    </style>
+  </head>
+  <body>
+    <h1>redtap</h1>
+    <div class="row"><span>Observations</span><b id="count">…</b></div>
+    <div class="row"><span>Unique posts</span><b id="unique">…</b></div>
+    <button id="export">Export JSONL</button>
+    <div class="status" id="status"></div>
+    <script src="popup.js"></script>
+  </body>
+</html>

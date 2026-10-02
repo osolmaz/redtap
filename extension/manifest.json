@@ -1,0 +1,32 @@
+{
+  "manifest_version": 3,
+  "name": "redtap",
+  "version": "0.1.0",
+  "description": "Passively captures Reddit posts as you browse and saves them locally as JSONL",
+  "permissions": [
+    "storage",
+    "unlimitedStorage",
+    "downloads"
+  ],
+  "host_permissions": [
+    "*://*.reddit.com/*"
+  ],
+  "background": {
+    "service_worker": "background.js",
+    "type": "module"
+  },
+  "content_scripts": [
+    {
+      "matches": ["*://*.reddit.com/*"],
+      "js": ["content.js"],
+      "run_at": "document_idle"
+    }
+  ],
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "redtap"
+  },
+  "externally_connectable": {
+    "matches": ["chrome-extension://aahdialpkbjlbfjkpamfclbnlbinekal/*"]
+  }
+}
