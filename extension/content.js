@@ -22,7 +22,8 @@
       return null;
     };
     const ratioRaw = attr('upvote-ratio');
-    return {
+    const bodyText = (element.querySelector?.('[slot="text-body"]')?.textContent ?? '').replace(/\s+/g, ' ').trim().slice(0, 20_000);
+    const record = {
       post_id: id,
       post_at: attr('created-timestamp'),
       captured_at: Date.now(),
@@ -42,6 +43,8 @@
       award_count: exact(attr('award-count')),
       metrics: { score: exact(attr('score')), comments: exact(attr('comment-count')), upvote_ratio: ratioRaw === null ? null : Number(ratioRaw) },
     };
+    if (bodyText.length > 0) record.selftext = bodyText;
+    return record;
   }
 
   function captureAll(root) {

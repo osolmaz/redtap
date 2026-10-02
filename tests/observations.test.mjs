@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { canonical, exactCounter, extractPostRecord, observationId, shouldSampleUnchanged } from '../extension/lib/observations.js';
+import { canonical, exactCounter, extractPostRecord, extractSelftext, observationId, parseTimestamp, postsFromApiPayload, recordFromApiPost, shouldSampleUnchanged } from '../extension/lib/observations.js';
 
 test('exactCounter accepts only safe digit strings', () => {
   assert.equal(exactCounter('85'), 85);
@@ -53,4 +53,74 @@ test('extractPostRecord reads shreddit attributes and skips foreign elements', (
   assert.equal(record.source_endpoint, '/r/LocalLLaMA/');
   assert.equal(extractPostRecord({ tagName: 'div' }), null);
   assert.equal(extractPostRecord({ tagName: 'shreddit-post', getAttribute: () => null }), null);
+});
+
+test('parseTimestamp normalizes Reddit formats into ISO strings', () => {
+  assert.equal(parseTimestamp('2026-10-02T00:09:04.914000+0000'), '2026-10-02T00:09:04.914Z');
+  assert.equal(parseTimestamp('2026-10-02T00:09:04.914Z'), '2026-10-02T00:09:04.914Z');
+  assert.equal(parseTimestamp(''), null);
+  assert.equal(parseTimestamp('not-a-date'), null);
+  assert.equal(parseTimestamp(null), null);
+});
+
+test('extractSelftext reads the text-body slot and normalizes whitespace', () => {
+  const withBody = { querySelector: (sel) => (sel === '[slot="text-body"]' ? { textContent: '  line one\n\nline two  ' } : null) };
+  assert.equal(extractSelftext(withBody), 'line one line two');
+  assert.equal(extractSelftext({ querySelector: () => null }), null);
+  assert.equal(extractSelftext({ querySelector: () => ({ textContent: '   ' }) }), null);
+  assert.equal(extractSelftext(null), null);
+});
+
+test('extractPostRecord includes selftext only when the body renders', async () => {
+  const attr = (name) => ({ id: 't3_x1', permalink: '/r/x/comments/x1/y/' })[name] ?? null;
+  const withBody = {
+    tagName: 'shreddit-post',
+    ownerDocument: { URL: 'https://www.reddit.com/r/x/' },
+    getAttribute: attr,
+    querySelector: () => ({ textContent: 'full body text' }),
+  };
+  const withoutBody = { ...withBody, querySelector: () => null };
+  const a = extractPostRecord(withBody, { capturedAtMs: 1 });
+  const b = extractPostRecord(withoutBody, { capturedAtMs: 1 });
+  assert.equal(a.selftext, 'full body text');
+  assert.equal('selftext' in b, false);
+  assert.notEqual(await observationId(a), await observationId(b));
+});
+
+test('recordFromApiPost normalizes a reddit t3 entry', () => {
+  const entry = {
+    id: '1wcbid7',
+    title: 'DeepSeek V4.1 Flash is out',
+    author: 'someone',
+    author_fullname: 't2_abc',
+    subreddit: 'LocalLLaMA',
+    subreddit_id: 't5_2rc39',
+    subreddit_name_prefixed: 'r/LocalLLaMA',
+    permalink: '/r/LocalLLaMA/comments/1wcbid7/deepseek_v41_flash_is_out/',
+    created_utc: 1790930000.5,
+    score: 1200,
+    num_comments: 87,
+    upvote_ratio: 0.93,
+    is_self: true,
+    selftext: 'the release notes body',
+  };
+  const record = recordFromApiPost(entry, { capturedAtMs: 5, sourceEndpoint: '/api/tap' });
+  assert.equal(record.post_id, 't3_1wcbid7');
+  assert.equal(record.contributed_by, 'tap');
+  assert.equal(record.selftext, 'the release notes body');
+  assert.equal(record.metrics.comments, 87);
+  assert.equal(record.post_at, new Date(1790930000500).toISOString());
+  assert.equal(recordFromApiPost({ id: 'x' }), null);
+  assert.equal(recordFromApiPost(null), null);
+  const removed = recordFromApiPost({ ...entry, selftext: '[removed]' });
+  assert.equal('selftext' in removed, false);
+});
+
+test('postsFromApiPayload walks nested listings and dedupes', () => {
+  const post = (id, extra = {}) => ({ kind: 't3', data: { id, title: 't', permalink: '/r/x/comments/' + id + '/', ...extra } });
+  const payload = [{ data: { children: [post('a')] } }, { data: { children: [post('a'), post('b')] } }];
+  const records = postsFromApiPayload(payload, { capturedAtMs: 7 });
+  assert.equal(records.length, 2);
+  assert.equal(records[0].post_id, 't3_a');
+  assert.equal(records[1].post_id, 't3_b');
 });

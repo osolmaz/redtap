@@ -30,7 +30,13 @@ export function renderBrowsePage(posts: PostSummary[], filter: string | undefine
   const rows = sorted
     .map(
       (p) => `<tr>
-        <td><a href="https://www.reddit.com${escapeHtml(p.permalink)}">${escapeHtml(p.title ?? p.post_id)}</a></td>
+        <td><a href="https://www.reddit.com${escapeHtml(p.permalink)}">${escapeHtml(p.title ?? p.post_id)}</a>${
+          p.selftext
+            ? `<details class="body"><summary>body</summary><div class="md">${escapeHtml(
+                p.selftext.length > 2000 ? p.selftext.slice(0, 2000) + "…" : p.selftext,
+              )}</div></details>`
+            : ""
+        }</td>
         <td>${escapeHtml(p.subreddit ?? "")}</td>
         <td>${escapeHtml(p.author ?? "")}</td>
         <td class="num">${p.score_last ?? "–"}</td>
@@ -66,6 +72,9 @@ export function renderBrowsePage(posts: PostSummary[], filter: string | undefine
     td.num { text-align: right; font-variant-numeric: tabular-nums; }
     .delta-up { color: #4ade80; }
     .delta-down { color: #f87171; }
+    details.body { margin-top: 4px; }
+    details.body summary { cursor: pointer; color: #8b98a5; font-size: 12px; }
+    details.body .md { white-space: pre-wrap; color: #c3cfd8; max-width: 640px; margin-top: 4px; }
   </style>
 </head>
 <body>

@@ -21,6 +21,7 @@ export type StoredRecord = {
   author: string | null;
   subreddit: string | null;
   permalink: string;
+  selftext?: string | null;
   metrics: { score?: number | null; comments?: number | null; upvote_ratio?: number | null };
 };
 
@@ -38,6 +39,7 @@ export type PostSummary = {
   score_delta: number | null;
   comments_last: number | null;
   comments_delta: number | null;
+  selftext: string | null;
 };
 
 export class RecordStore {
@@ -111,6 +113,8 @@ export class RecordStore {
         comments_last: commentsLast,
         comments_delta:
           commentsFirst !== null && commentsLast !== null ? commentsLast - commentsFirst : null,
+        selftext:
+          [...sightings].reverse().map((r) => r.selftext).find((t) => typeof t === "string" && t.length > 0) ?? null,
       });
     }
     return summaries;

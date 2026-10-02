@@ -5,6 +5,6 @@
   "type": "module",
   "description": "Passively captures Reddit posts as you browse and saves them locally as JSONL, along the lines of xTap",
   "scripts": {
-    "test": "node --test tests/observations.test.mjs"
+    "test": "node --test tests/observations.test.mjs tests/network-capture.test.mjs"
   }
 }

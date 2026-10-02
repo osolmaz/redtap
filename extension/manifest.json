@@ -5,6 +5,7 @@
   "description": "Passively captures Reddit posts as you browse and saves them locally as JSONL",
   "permissions": [
     "alarms",
+    "debugger",
     "storage",
     "unlimitedStorage",
     "downloads"

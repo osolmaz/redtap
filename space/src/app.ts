@@ -15,7 +15,7 @@ export const recordSchema = z
   .object({
     observation_id: z.string().regex(/^rt_[a-f0-9]{24}$/u),
     post_id: z.string().regex(/^t3_[a-z0-9]+$/iu),
-    post_at: z.string(),
+    post_at: z.string().nullable(),
     captured_at: z.number(),
     source_endpoint: z.string(),
     contributed_by: z.string().min(1),
