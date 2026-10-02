@@ -19,6 +19,13 @@ along the lines of [xTap](https://github.com/mkubicek/xTap), for Reddit.
   protocol the [Infinite Feed Scroller](https://github.com/osolmaz/infinite-feed-scroller)
   uses with xTap, so the scroller can drive Reddit scrape jobs with subreddit
   feeds playing the role of X lists.
+- **Pool sync** mirrors xtap-pool: observations queue in the extension and
+  flush in batches with backoff to `space/` (a Hugging Face Docker Space,
+  deployed from this same repo via `scripts/deploy-space.sh`), which dedupes
+  by observation id and appends gzipped JSONL segments to the private
+  immutable Bucket log `osolmaz/redtap-data` (`v1/segments/post/…`). Configure
+  the Space URL + `POOL_TOKEN` in the extension options.
+
 
 ## Why DOM capture
 
