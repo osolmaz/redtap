@@ -164,7 +164,23 @@ chrome.runtime.onConnectExternal.addListener((port) => {
 
 // ------------------------------------------------------------ message wiring
 
-void initPoolSync();
+async function swLog(entry) {
+  try {
+    const log = (await store.get('swLog', []));
+    log.push({ at: Date.now(), ...entry });
+    await store.set('swLog', log.slice(-80));
+  } catch {}
+}
+
+void (async () => {
+  await swLog({ event: 'sw-start' });
+  try {
+    await initPoolSync();
+    await swLog({ event: 'pool-sync-init-ok' });
+  } catch (error) {
+    await swLog({ event: 'pool-sync-init-failed', error: String(error?.message ?? error).slice(0, 150) });
+  }
+})();
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message?.type !== 'redtap:capture') return;
