@@ -1,6 +1,6 @@
 import { serve } from "@hono/node-server";
 import { createApp } from "./app.ts";
-import { openBucketLog } from "./bucket-log.js";
+import { openBucketLog } from "./bucket-log.ts";
 
 const hubToken = process.env.HF_TOKEN ?? "";
 const poolToken = process.env.POOL_TOKEN ?? "";

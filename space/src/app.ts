@@ -7,7 +7,7 @@
 import { Hono } from "hono";
 import { z } from "zod";
 
-import { openBucketLog, type BucketLog } from "./bucket-log.js";
+import { openBucketLog, type BucketLog } from "./bucket-log.ts";
 
 export const recordSchema = z
   .object({

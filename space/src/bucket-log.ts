@@ -12,6 +12,8 @@ import { promisify } from "node:util";
 
 import { downloadFile, listFiles, uploadFile } from "@huggingface/hub";
 
+// hub v2 signatures (matching xtap-pool): uploadFile takes file: {path, content: Blob}.
+
 const gzipAsync = promisify(gzip);
 
 const REPO = { type: "bucket", name: "osolmaz/redtap-data" } as const;
@@ -44,8 +46,8 @@ export async function openBucketLog(hubArgs: {
 
   const loadSeen = async (): Promise<Set<string>> => {
     try {
-      const blob = await downloadFile({ ...hub, path: SEEN_PATH });
-      const parsed = JSON.parse(await blob.text()) as { ids?: string[] };
+      const blob = await downloadFile({ repo: REPO, accessToken: hub.accessToken, path: SEEN_PATH, xet: false });
+      const parsed = blob === null ? {} : JSON.parse(await blob.text()) as { ids?: string[] };
       return new Set(Array.isArray(parsed.ids) ? parsed.ids : []);
     } catch {
       return new Set();
@@ -56,9 +58,10 @@ export async function openBucketLog(hubArgs: {
     const ids = [...seen].slice(-MAX_SEEN);
     const body = JSON.stringify({ version: 1, ids });
     await uploadFile({
-      ...hub,
-      path: SEEN_PATH,
-      content: body,
+      repo: REPO,
+      accessToken: hub.accessToken,
+      file: { path: SEEN_PATH, content: new Blob([body]) },
+      commitTitle: `redtap: seen set (${ids.length})`,
     });
   };
 
@@ -74,17 +77,24 @@ export async function openBucketLog(hubArgs: {
       `v1/segments/post/${day}/${stamp}-${transactionId}-${sha256(body)}.json.gz`
     );
     await uploadFile({
-      ...hub,
-      path,
-      content: Buffer.from(compressed),
+      repo: REPO,
+      accessToken: hub.accessToken,
+      file: { path, content: new Blob([new Uint8Array(compressed)]) },
+      commitTitle: `redtap: append ${lines.length} observations`,
     });
     return { path, transactionId, count: lines.length };
   };
 
   const totalRecords = async (): Promise<number> => {
     let total = 0;
-    for await (const file of listFiles({ ...hub, paths: true })) {
-      if (typeof file === "object" && "path" in file && String(file.path).includes("/segments/post/")) {
+    for await (const entry of listFiles({
+      repo: REPO,
+      accessToken: hub.accessToken,
+      recursive: true,
+      path: "v1/segments/post/",
+      expand: false,
+    })) {
+      if (typeof entry === "object" && "path" in entry && String(entry.path).endsWith(".json.gz")) {
         total += 1;
       }
     }
