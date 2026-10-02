@@ -7,7 +7,9 @@
 import { Hono } from "hono";
 import { z } from "zod";
 
+import { renderBrowsePage } from "./browse.ts";
 import { openBucketLog, type BucketLog } from "./bucket-log.ts";
+import { RecordStore } from "./record-store.ts";
 
 export const recordSchema = z
   .object({
@@ -43,10 +45,11 @@ export type Config = Readonly<{
   hubToken: string;
 }>;
 
-export function createApp(config: Config, log: BucketLog) {
+export function createApp(config: Config, log: BucketLog, store?: RecordStore) {
   const app = new Hono();
   const seen = new Set<string>();
   let seenLoaded = false;
+  const recordStore = store ?? new RecordStore();
 
   const ensureSeen = async (): Promise<void> => {
     if (seenLoaded) return;
@@ -58,13 +61,15 @@ export function createApp(config: Config, log: BucketLog) {
   const authorized = (header: string | undefined): boolean =>
     header === `Bearer ${config.poolToken}`;
 
-  app.get("/", (c) =>
-    c.json({
-      service: "redtap-space",
-      status: "ok",
-      seen: seen.size,
-    }),
-  );
+  app.get("/", async (c) => {
+    await recordStore.ensureLoaded(config.hubToken);
+    return c.html(renderBrowsePage(recordStore.posts(), c.req.query("subreddit"), Date.now()));
+  });
+
+  app.get("/api/posts", async (c) => {
+    await recordStore.ensureLoaded(config.hubToken);
+    return c.json({ posts: recordStore.posts() });
+  });
 
   app.get("/api/status", async (c) => {
     await ensureSeen();
@@ -102,6 +107,9 @@ export function createApp(config: Config, log: BucketLog) {
     if (fresh.length > 0) {
       await log.appendSegment(fresh);
       await log.saveSeen(seen);
+      for (const record of fresh) {
+        recordStore.add(record as (typeof fresh)[number] & { pooled_at: number });
+      }
     }
     return c.json({ added: fresh.length, duplicates, rejected });
   });

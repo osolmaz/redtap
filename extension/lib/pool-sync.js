@@ -62,7 +62,15 @@ export function statusSnapshot() {
   return { ...stats, queued: queue.length, paused: config.poolPaused, configured: isConfigured() };
 }
 
-export function setConfig(next) {
+export async function flushNowNow() {
+  await loadState();
+  const before = queue.length;
+  backoffMs = 0;
+  await flushNow();
+  return before - queue.length;
+}
+
+export function setConfig(next, flushNowFlag = false) {
   config = { ...config, ...next };
   void storage().set({
     poolUrl: config.poolUrl,
@@ -70,7 +78,8 @@ export function setConfig(next) {
     poolPaused: config.poolPaused,
     poolStats: stats,
   });
-  scheduleFlush(1000);
+  if (flushNowFlag) scheduleFlush(200);
+  else scheduleFlush(1000);
 }
 
 async function flushNow() {

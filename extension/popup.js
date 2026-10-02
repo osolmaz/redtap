@@ -62,7 +62,25 @@ chrome.runtime.sendMessage({ type: 'redtap:pool-status' }, (status) => renderPoo
 renderCurrentTab();
 
 syncNowEl.addEventListener('click', () => {
-  chrome.runtime.sendMessage({ type: 'redtap:pool-status' }, (status) => renderPool(status ?? {}));
+  syncNowEl.disabled = true;
+  chrome.runtime.sendMessage({ type: 'redtap:pool-flush-now' }, (response) => {
+    syncNowEl.disabled = false;
+    chrome.runtime.sendMessage({ type: 'redtap:pool-status' }, (status) => renderPool(status ?? {}));
+  });
+});
+
+const exportAllEl = document.getElementById('export-all');
+exportAllEl.addEventListener('click', async () => {
+  exportAllEl.disabled = true;
+  try {
+    const response = await chrome.runtime.sendMessage({ type: 'redtap:export', uniqueOnly: false });
+    exportStatusEl.style.display = 'block';
+    exportStatusEl.textContent =
+      response?.exported != null ? 'Exported ' + response.exported + ' observations' : 'Export failed';
+    exportStatusEl.className = 'status connected';
+  } finally {
+    exportAllEl.disabled = false;
+  }
 });
 
 exportBtn.addEventListener('click', async () => {

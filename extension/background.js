@@ -1,7 +1,7 @@
 // redtap service worker: local capture store, unique-post export, and the
 // Infinite Feed Scroller scrape bridge (xtap-scrape-v1 protocol).
 import { canonical, observationId, postKey, shouldSampleUnchanged } from './lib/observations.js';
-import { admitRecords, initPoolSync, setConfig, statusSnapshot } from './lib/pool-sync.js';
+import { admitRecords, flushNowNow, initPoolSync, setConfig, statusSnapshot } from './lib/pool-sync.js';
 
 const EXPORT_BATCH_LIMIT = 5000;
 
@@ -35,6 +35,15 @@ async function recordObservation(record) {
   };
   await store.set('redtapState', state);
   return observation;
+}
+
+async function exportAllJsonl() {
+  const lines = await store.get('redtapLines', []);
+  const payload = lines.map((line) => JSON.stringify(line)).join('\n') + '\n';
+  const url = URL.createObjectURL(new Blob([payload], { type: 'application/x-ndjson' }));
+  const stamp = new Date().toISOString().replace(/[:.]/g, '-');
+  await chrome.downloads.download({ url, filename: `redtap/redtap-observations-${stamp}.jsonl` });
+  return lines.length;
 }
 
 async function exportJsonl() {
@@ -163,7 +172,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message?.type === 'redtap:pool-config') {
-    setConfig(message.config ?? {});
+    setConfig(message.config ?? {}, message.flushNow === true);
     sendResponse({ ok: true });
     return;
   }
@@ -171,7 +180,16 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     sendResponse(statusSnapshot());
     return;
   }
+  if (message?.type === 'redtap:pool-flush-now') {
+    flushNowNow().then((n) => sendResponse({ flushed: n }));
+    return true;
+  }
   if (message?.type !== 'redtap:export') return;
-  exportJsonl().then((count) => sendResponse({ exported: count }));
+  const uniqueOnly = message.uniqueOnly !== false;
+  if (uniqueOnly) {
+    exportJsonl().then((count) => sendResponse({ exported: count }));
+  } else {
+    exportAllJsonl().then((count) => sendResponse({ exported: count }));
+  }
   return true;
 });
