@@ -119,7 +119,7 @@ chrome.runtime.onConnectExternal.addListener((port) => {
         protocolVersion: SCRAPE_PROTOCOL_VERSION,
         runId: run.runId,
         run: { ...run, leaseExpiresAtMs: Date.now() + 60_000, protocolVersion: SCRAPE_PROTOCOL_VERSION },
-        capabilities: ['typed-errors', 'run-leases'],
+        capabilities: ['search-timeline-observations', 'typed-errors', 'run-leases'],
         observations: [],
       });
       return;
