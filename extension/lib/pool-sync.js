@@ -123,7 +123,9 @@ async function flushNow() {
 
 export async function initPoolSync() {
   await loadState();
-  chrome.alarms.create('redtap-pool-flush', { periodInMinutes: 2, delayInMinutes: 1 });
+  // 30s (the alarms minimum) keeps the service worker effectively always alive, so cross-extension
+  // bridge connects are never lost to worker shutdown.
+  chrome.alarms.create('redtap-pool-flush', { periodInMinutes: 0.5, delayInMinutes: 0.5 });
   chrome.alarms.onAlarm.addListener((alarm) => {
     if (alarm.name === 'redtap-pool-flush') {
       backoffMs = 0;
