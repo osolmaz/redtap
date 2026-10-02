@@ -87,13 +87,27 @@ function sendObservations(port, run, records) {
   port.postMessage({ type: 'scrape:observations', protocolVersion: SCRAPE_PROTOCOL_VERSION, runId: run.runId, observations });
 }
 
+async function bridgeLog(entry) {
+  try {
+    const log = (await store.get('bridgeLog', []));
+    log.push({ at: Date.now(), ...entry });
+    await store.set('bridgeLog', log.slice(-50));
+  } catch {}
+}
+
 chrome.runtime.onConnectExternal.addListener((port) => {
-  if (port.name !== SCRAPE_PORT_NAME) return;
+  void bridgeLog({ event: 'connect', name: port.name, sender: port.sender?.id, senderUrl: port.sender?.url?.slice(0, 60) });
+  if (port.name !== SCRAPE_PORT_NAME) {
+    void bridgeLog({ event: 'reject-name', name: port.name });
+    return;
+  }
   if (port.sender?.id !== SCROLLER_EXTENSION_ID) {
+    void bridgeLog({ event: 'reject-sender', sender: port.sender?.id });
     port.disconnect();
     return;
   }
   port.onMessage.addListener((message) => {
+    void bridgeLog({ event: 'message', type: message?.type, pv: message?.protocolVersion });
     if (!message || message.protocolVersion !== SCRAPE_PROTOCOL_VERSION) {
       port.postMessage({ type: 'scrape:error', protocolVersion: SCRAPE_PROTOCOL_VERSION, runId: message?.runId ?? '', errorCode: 'invalid-request', error: 'unsupported protocol version' });
       return;
