@@ -14,7 +14,10 @@ export function initControl({ alarmApi = globalThis.chrome?.alarms, fetchImpl = 
   alarmApi.create(CONTROL_ALARM, { periodInMinutes: 1, delayInMinutes: 0.1 });
 }
 
-export async function poll(getConfig, fetchImpl = globalThis.fetch) {
+const RELOAD_GUARD_KEY = 'lastControlReloadAtMs';
+const RELOAD_GUARD_MS = 10 * 60_000;
+
+export async function poll(getConfig, fetchImpl = globalThis.fetch, storage = globalThis.chrome?.storage?.local) {
   let poolUrl = '';
   let poolToken = '';
   try {
@@ -31,9 +34,16 @@ export async function poll(getConfig, fetchImpl = globalThis.fetch) {
     });
     if (!response.ok) return;
     const control = await response.json();
-    if (control?.reload === true) {
-      globalThis.chrome.runtime.reload();
+    if (control?.reload !== true) return;
+    // Loop guard: a stale flag file in the bucket must not cause an endless
+    // reload cycle. Only honor the flag once per guard window.
+    if (storage) {
+      const bag = await storage.get(RELOAD_GUARD_KEY);
+      const last = bag[RELOAD_GUARD_KEY];
+      if (typeof last === 'number' && Date.now() - last < RELOAD_GUARD_MS) return;
+      await storage.set({ [RELOAD_GUARD_KEY]: Date.now() });
     }
+    globalThis.chrome.runtime.reload();
   } catch {
     // unreachable Space or transient failure: try again next poll
   }
