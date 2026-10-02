@@ -119,6 +119,22 @@ function respondRun(run) {
   return { ...run, leaseExpiresAtMs: Date.now() + 60_000, protocolVersion: SCRAPE_PROTOCOL_VERSION, pending: undefined };
 }
 
+// -------------------------------------------------------- bridge counters
+
+let captureMessages = 0;
+let capturesStored = 0;
+let pollRequests = 0;
+let pendingPushed = 0;
+
+function runsSnapshot() {
+  return [...runs.values()].map((run) => ({
+    runId: run.runId.slice(0, 8),
+    state: run.state,
+    pending: run.pending.length,
+    lastCursor: run.lastCursor,
+  }));
+}
+
 chrome.runtime.onMessageExternal.addListener((message, sender, sendResponse) => {
   if (sender?.id !== SCROLLER_EXTENSION_ID) {
     void bridgeLog({ event: 'reject-sender-msg', sender: sender?.id });
@@ -150,6 +166,7 @@ chrome.runtime.onMessageExternal.addListener((message, sender, sendResponse) => 
       return;
     }
     run.updatedAtMs = Date.now();
+    pollRequests += 1;
     const drained = run.pending.splice(0);
     const observations = drained.map((record) => ({
       cursor: (run.lastCursor += 1),
@@ -283,6 +300,11 @@ initControl({
       swLog: (logBag.swLog ?? []).slice(-8),
       bodyQueue: bodyQueue.length,
       bodyFailed: bodyFailed.size,
+      runs: runsSnapshot(),
+      captureMessages,
+      capturesStored,
+      pollRequests,
+      pendingPushed,
     };
   },
 });
@@ -290,13 +312,18 @@ initControl({
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message?.type !== 'redtap:capture') return;
   (async () => {
+    captureMessages += 1;
     const stored = [];
     for (const record of message.records ?? []) {
       const observation = await recordObservation(record);
       if (observation) stored.push(observation);
     }
+    capturesStored += stored.length;
     for (const run of runs.values()) {
-      if (stored.length > 0) run.pending.push(...stored);
+      if (stored.length > 0) {
+        run.pending.push(...stored);
+        pendingPushed += stored.length;
+      }
     }
     for (const [runId, port] of runPorts) {
       const run = runs.get(runId);
