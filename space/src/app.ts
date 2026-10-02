@@ -76,6 +76,31 @@ export function createApp(config: Config, log: BucketLog, store?: RecordStore) {
     return c.json({ seen: seen.size, segments: await log.totalRecords() });
   });
 
+  const telemetry: Array<Record<string, unknown>> = [];
+  app.post("/api/telemetry", async (c) => {
+    if (!authorized(c.req.header("authorization"))) {
+      return c.json({ error: "invalid or missing pool token" }, 401);
+    }
+    let payload: unknown;
+    try {
+      payload = await c.req.json();
+    } catch {
+      return c.json({ error: "body must be JSON" }, 400);
+    }
+    if (payload && typeof payload === "object") {
+      telemetry.push(payload as Record<string, unknown>);
+      if (telemetry.length > 30) telemetry.shift();
+    }
+    return c.json({ ok: true });
+  });
+
+  app.get("/api/telemetry", async (c) => {
+    if (!authorized(c.req.header("authorization"))) {
+      return c.json({ error: "invalid or missing pool token" }, 401);
+    }
+    return c.json({ heartbeats: telemetry });
+  });
+
   let controlCache: { at: number; doc: Record<string, unknown> | null } = { at: 0, doc: null };
   app.get("/api/control", async (c) => {
     if (!authorized(c.req.header("authorization"))) {

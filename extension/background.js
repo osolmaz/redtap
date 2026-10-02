@@ -272,6 +272,19 @@ initControl({
     const bag = await chrome.storage.local.get(['poolUrl', 'poolToken']);
     return { poolUrl: bag.poolUrl ?? '', poolToken: bag.poolToken ?? '' };
   },
+  heartbeat: async () => {
+    const [logBag, lines] = await Promise.all([
+      chrome.storage.local.get('swLog'),
+      store.get('redtapLines', []),
+    ]);
+    return {
+      lines: lines.length,
+      selftextLines: lines.filter((line) => line.selftext).length,
+      swLog: (logBag.swLog ?? []).slice(-8),
+      bodyQueue: bodyQueue.length,
+      bodyFailed: bodyFailed.size,
+    };
+  },
 });
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
