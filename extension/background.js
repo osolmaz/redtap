@@ -251,6 +251,19 @@ void (async () => {
   } catch (error) {
     await swLog({ event: 'pool-sync-init-failed', error: String(error?.message ?? error).slice(0, 150) });
   }
+  try {
+    const lines = await store.get('redtapLines', []);
+    const latest = new Map();
+    for (const line of lines) {
+      if (!line?.post_id) continue;
+      latest.set(line.post_id, line);
+    }
+    const bodyless = [...latest.values()]
+      .filter((record) => !record.selftext && record.permalink)
+      .map((record) => ({ post_id: record.post_id, permalink: record.permalink }));
+    enqueueBodyFetch(bodyless);
+    await swLog({ event: 'boot-body-enrich', count: bodyless.length });
+  } catch {}
 })();
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
