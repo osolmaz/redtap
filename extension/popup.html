@@ -1,22 +1,31 @@
-<!doctype html>
+<!DOCTYPE html>
 <html>
-  <head>
-    <meta charset="utf-8" />
-    <style>
-      body { font: 13px/1.4 system-ui, sans-serif; width: 260px; margin: 0; padding: 12px; }
-      h1 { font-size: 14px; margin: 0 0 8px; }
-      .row { display: flex; justify-content: space-between; margin: 4px 0; color: #444; }
-      button { margin-top: 10px; width: 100%; padding: 6px; border: 1px solid #ccc; border-radius: 6px; background: #fff; cursor: pointer; }
-      button:hover { background: #f2f2f2; }
-      .status { color: #060; min-height: 1.2em; margin-top: 6px; }
-    </style>
-  </head>
-  <body>
+<head>
+  <meta charset="utf-8">
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <div class="container">
     <h1>redtap</h1>
-    <div class="row"><span>Observations</span><b id="count">…</b></div>
-    <div class="row"><span>Unique posts</span><b id="unique">…</b></div>
-    <button id="export">Export JSONL</button>
-    <div class="status" id="status"></div>
-    <script src="popup.js"></script>
-  </body>
+    <div id="status" class="status disconnected"></div>
+    <div class="stats">
+      <div class="stat">
+        <span class="stat-value" id="observations-count">0</span>
+        <span class="stat-label">Observations</span>
+      </div>
+      <div class="stat">
+        <span class="stat-value" id="unique-count">0</span>
+        <span class="stat-label">Unique posts</span>
+      </div>
+      <div class="stat">
+        <span class="stat-value" id="subreddit-count">0</span>
+        <span class="stat-label">Subreddits</span>
+      </div>
+    </div>
+    <div id="current" class="current"></div>
+    <button id="export" class="primary-btn">Export JSONL</button>
+    <div id="export-status" class="status" style="display: none;"></div>
+  </div>
+  <script src="popup.js"></script>
+</body>
 </html>

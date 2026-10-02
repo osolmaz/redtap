@@ -1,19 +1,59 @@
-const countEl = document.getElementById('count');
-const uniqueEl = document.getElementById('unique');
 const statusEl = document.getElementById('status');
+const observationsEl = document.getElementById('observations-count');
+const uniqueEl = document.getElementById('unique-count');
+const subredditsEl = document.getElementById('subreddit-count');
+const currentEl = document.getElementById('current');
+const exportBtn = document.getElementById('export');
+const exportStatusEl = document.getElementById('export-status');
 
-function render(state) {
-  countEl.textContent = String((state.lines ?? []).length);
-  const seen = new Set((state.lines ?? []).map((line) => line.post_id));
-  uniqueEl.textContent = String(seen.size);
+function renderCounts(lines) {
+  const records = lines ?? [];
+  observationsEl.textContent = String(records.length);
+  const posts = new Set(records.map((line) => line.post_id));
+  uniqueEl.textContent = String(posts.size);
+  const subs = new Set(records.map((line) => line.subreddit).filter(Boolean));
+  subredditsEl.textContent = String(subs.size);
 }
 
-chrome.storage.local.get('redtapLines').then((bag) => render({ lines: bag.redtapLines ?? [] }));
-chrome.storage.onChanged.addListener((changes, area) => {
-  if (area === 'local' && changes.redtapLines) render({ lines: changes.redtapLines.newValue ?? [] });
-});
+async function renderCurrentTab() {
+  try {
+    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    const url = tab?.url ?? '';
+    const match = /reddit\.com\/r\/([A-Za-z0-9_]+)/.exec(url);
+    if (match) {
+      statusEl.textContent = 'Capturing';
+      statusEl.className = 'status connected';
+      currentEl.innerHTML = 'Scraping <b>r/' + match[1] + '</b> right now';
+    } else if (url.includes('reddit.com')) {
+      statusEl.textContent = 'Capturing';
+      statusEl.className = 'status connected';
+      currentEl.innerHTML = 'On <b>reddit.com</b>';
+    } else {
+      statusEl.textContent = 'Not on Reddit';
+      statusEl.className = 'status disconnected';
+      currentEl.textContent = '';
+    }
+  } catch {
+    statusEl.textContent = 'Idle';
+    statusEl.className = 'status disconnected';
+  }
+}
 
-document.getElementById('export').addEventListener('click', async () => {
-  const response = await chrome.runtime.sendMessage({ type: 'redtap:export' });
-  statusEl.textContent = response?.exported != null ? `exported ${response.exported} posts` : 'export failed';
+chrome.storage.local.get('redtapLines').then((bag) => renderCounts(bag.redtapLines ?? []));
+chrome.storage.onChanged.addListener((changes, area) => {
+  if (area === 'local' && changes.redtapLines) renderCounts(changes.redtapLines.newValue ?? []);
+});
+renderCurrentTab();
+
+exportBtn.addEventListener('click', async () => {
+  exportBtn.disabled = true;
+  try {
+    const response = await chrome.runtime.sendMessage({ type: 'redtap:export' });
+    exportStatusEl.style.display = 'block';
+    exportStatusEl.textContent =
+      response?.exported != null ? 'Exported ' + response.exported + ' unique posts' : 'Export failed';
+    exportStatusEl.className = 'status connected';
+  } finally {
+    exportBtn.disabled = false;
+  }
 });
