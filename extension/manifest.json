@@ -4,13 +4,19 @@
   "version": "0.1.0",
   "description": "Passively captures Reddit posts as you browse and saves them locally as JSONL",
   "permissions": [
+    "alarms",
     "storage",
     "unlimitedStorage",
     "downloads"
   ],
   "host_permissions": [
-    "*://*.reddit.com/*"
+    "*://*.reddit.com/*",
+    "https://*.hf.space/*"
   ],
+  "options_ui": {
+    "page": "options.html",
+    "open_in_tab": false
+  },
   "background": {
     "service_worker": "background.js",
     "type": "module"

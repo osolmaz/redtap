@@ -1,0 +1,25 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <style>
+      body { font: 13px/1.5 system-ui, sans-serif; width: 380px; padding: 14px; }
+      label { display: block; margin: 10px 0 4px; font-weight: 600; }
+      input { width: 100%; padding: 6px; border: 1px solid #ccc; border-radius: 6px; }
+      button { margin-top: 12px; padding: 6px 14px; border: none; border-radius: 9999px; background: #ff4500; color: #fff; font-weight: 600; cursor: pointer; }
+      .saved { color: #060; margin-top: 8px; min-height: 1.2em; }
+      .hint { color: #777; font-size: 12px; margin-top: 8px; }
+    </style>
+  </head>
+  <body>
+    <h1 style="font-size:16px">redtap pool sync</h1>
+    <label for="pool-url">Space URL</label>
+    <input id="pool-url" placeholder="https://osolmaz-redtap-space.hf.space" spellcheck="false" />
+    <label for="pool-token">Pool token</label>
+    <input id="pool-token" type="password" placeholder="POOL_TOKEN" />
+    <button id="save">Save</button>
+    <div class="saved" id="saved"></div>
+    <div class="hint">The token must match the Space's POOL_TOKEN secret. Captures flush in batches with backoff; delivery is at-least-once and the Space deduplicates.</div>
+    <script src="options.js"></script>
+  </body>
+</html>

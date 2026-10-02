@@ -1,6 +1,7 @@
 // redtap service worker: local capture store, unique-post export, and the
 // Infinite Feed Scroller scrape bridge (xtap-scrape-v1 protocol).
 import { canonical, observationId, postKey, shouldSampleUnchanged } from './lib/observations.js';
+import { admitRecords, initPoolSync, setConfig, statusSnapshot } from './lib/pool-sync.js';
 
 const EXPORT_BATCH_LIMIT = 5000;
 
@@ -140,6 +141,8 @@ chrome.runtime.onConnectExternal.addListener((port) => {
 
 // ------------------------------------------------------------ message wiring
 
+void initPoolSync();
+
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message?.type !== 'redtap:capture') return;
   (async () => {
@@ -152,12 +155,22 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       const run = runs.get(runId);
       if (run && stored.length > 0) sendObservations(port, run, stored);
     }
+    admitRecords(stored);
     sendResponse({ stored: stored.length });
   })();
   return true;
 });
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  if (message?.type === 'redtap:pool-config') {
+    setConfig(message.config ?? {});
+    sendResponse({ ok: true });
+    return;
+  }
+  if (message?.type === 'redtap:pool-status') {
+    sendResponse(statusSnapshot());
+    return;
+  }
   if (message?.type !== 'redtap:export') return;
   exportJsonl().then((count) => sendResponse({ exported: count }));
   return true;

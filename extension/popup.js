@@ -5,6 +5,8 @@ const subredditsEl = document.getElementById('subreddit-count');
 const currentEl = document.getElementById('current');
 const exportBtn = document.getElementById('export');
 const exportStatusEl = document.getElementById('export-status');
+const poolStatusEl = document.getElementById('pool-status');
+const syncNowEl = document.getElementById('pool-sync-now');
 
 function renderCounts(lines) {
   const records = lines ?? [];
@@ -19,7 +21,7 @@ async function renderCurrentTab() {
   try {
     const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
     const url = tab?.url ?? '';
-    const match = /reddit\.com\/r\/([A-Za-z0-9_]+)/.exec(url);
+    const match = /reddit\\.com\\/r\\/([A-Za-z0-9_]+)/.exec(url);
     if (match) {
       statusEl.textContent = 'Capturing';
       statusEl.className = 'status connected';
@@ -39,11 +41,29 @@ async function renderCurrentTab() {
   }
 }
 
+function renderPool(status) {
+  if (!status.configured) {
+    poolStatusEl.textContent = 'Not configured — open Options';
+    poolStatusEl.className = 'status disconnected';
+  } else if (status.paused) {
+    poolStatusEl.textContent = 'Paused';
+    poolStatusEl.className = 'status disconnected';
+  } else {
+    poolStatusEl.textContent = 'Queued ' + status.queued + ' · synced ' + status.synced + (status.lastError ? ' · ' + status.lastError : '');
+    poolStatusEl.className = 'status ' + (status.lastError ? 'disconnected' : 'connected');
+  }
+}
+
 chrome.storage.local.get('redtapLines').then((bag) => renderCounts(bag.redtapLines ?? []));
 chrome.storage.onChanged.addListener((changes, area) => {
   if (area === 'local' && changes.redtapLines) renderCounts(changes.redtapLines.newValue ?? []);
 });
+chrome.runtime.sendMessage({ type: 'redtap:pool-status' }, (status) => renderPool(status ?? {}));
 renderCurrentTab();
+
+syncNowEl.addEventListener('click', () => {
+  chrome.runtime.sendMessage({ type: 'redtap:pool-status' }, (status) => renderPool(status ?? {}));
+});
 
 exportBtn.addEventListener('click', async () => {
   exportBtn.disabled = true;

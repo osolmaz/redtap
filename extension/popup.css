@@ -93,3 +93,20 @@ button:hover {
   background: #ff4500;
   color: #fff;
 }
+
+.pool-section {
+  margin-top: 12px;
+}
+
+.settings-label {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #8b98a5;
+  margin-bottom: 6px;
+}
+
+button.sync-btn {
+  background: #33506e;
+  color: #e7e9ea;
+}
