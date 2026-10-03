@@ -623,7 +623,7 @@ async function probeWall() {
     if (!tab) return { attached: false };
     const reply = await chrome.debugger.sendCommand({ tabId: tab.tabId }, 'Runtime.evaluate', {
       returnByValue: true,
-      expression: `(() => {
+      expression: `(async () => {
         const visible = (el) => el.checkVisibility?.() === true;
         const closeBtns = [...document.querySelectorAll('button')]
           .filter((b) => visible(b) && /close|dismiss/i.test((b.getAttribute('aria-label') ?? '') + ' ' + (b.getAttribute('title') ?? '')))
@@ -631,13 +631,20 @@ async function probeWall() {
         const modal = [...document.querySelectorAll('div, section')]
           .filter((d) => visible(d) && d.textContent?.includes('Join the most real place'))
           .sort((a, b) => a.querySelectorAll('div').length - b.querySelectorAll('div').length)[0];
+        let me = null;
+        try {
+          const r = await fetch('https://www.reddit.com/api/me.json', { credentials: 'include' });
+          me = r.status === 200 ? ((await r.json())?.data?.name ?? 'ok') : 'http ' + r.status;
+        } catch (e) { me = 'err'; }
         return JSON.stringify({
           url: location.pathname,
+          me,
           posts: document.querySelectorAll('shreddit-post').length,
           closeBtns: closeBtns.slice(0, 5),
           modalButtons: modal ? [...modal.querySelectorAll('button')].slice(0, 10).map((b) => ({ label: b.getAttribute('aria-label'), text: b.textContent?.trim().slice(0, 30), visible: visible(b) })) : null,
         });
       })()`,
+      awaitPromise: true,
     });
     return { attached: true, raw: reply?.result?.value };
   } catch (error) {
