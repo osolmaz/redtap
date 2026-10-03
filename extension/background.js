@@ -130,6 +130,8 @@ async function openRun(message) {
   const stored = await store.get(RUNS_KEY, []);
   const saved = (Array.isArray(stored) ? stored : []).find((run) => run?.runId === message.runId);
   const run = saved ?? createRun(message);
+  run.restored = saved !== undefined;
+  run.openedAtMs = Date.now();
   run.state = 'running';
   run.updatedAtMs = Date.now();
   runs.set(run.runId, run);
@@ -154,6 +156,8 @@ function canonicalPostAt(value, fallbackMs) {
 
 function observationsReply(run) {
   const drained = run.pending.splice(0);
+  run.drainCount = (run.drainCount ?? 0) + 1;
+  run.lastCursorAtMs = Date.now();
   persistRuns();
   const nowMs = Date.now();
   const observations = drained.map((record) => ({
@@ -176,6 +180,10 @@ function runsSnapshot() {
     state: run.state,
     pending: run.pending.length,
     lastCursor: run.lastCursor,
+    bound: runPorts.has(run.runId),
+    drains: run.drainCount ?? 0,
+    openedAtMs: run.openedAtMs ?? null,
+    restored: run.restored ?? false,
   }));
 }
 
