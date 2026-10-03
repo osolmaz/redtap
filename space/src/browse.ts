@@ -53,12 +53,20 @@ function sortPosts(posts: PostSummary[], sort: SortKey): PostSummary[] {
   return sorted;
 }
 
+const BODY_LIMIT = 12_000;
+
+function bodyHtml(p: PostSummary): string {
+  if (!p.selftext) return "";
+  const text = p.selftext;
+  const inner =
+    text.length > BODY_LIMIT
+      ? `${escapeHtml(text.slice(0, BODY_LIMIT))}\n<details class="more"><summary>show remaining ${text.length - BODY_LIMIT} characters</summary><div class="md">${escapeHtml(text.slice(BODY_LIMIT))}</div></details>`
+      : escapeHtml(text);
+  return `<details class="body" open><summary>body</summary><div class="md">${inner}</div></details>`;
+}
+
 function card(p: PostSummary, now: number, sort: SortKey): string {
-  const body = p.selftext
-    ? `<details class="body"><summary>read body</summary><div class="md">${escapeHtml(
-        p.selftext.length > 4000 ? p.selftext.slice(0, 4000) + "\n\n…" : p.selftext,
-      )}</div></details>`
-    : "";
+  const body = bodyHtml(p);
   const scoreDelta = delta(p.score_delta);
   const commentsDelta = delta(p.comments_delta);
   return `<article class="post">
@@ -149,7 +157,14 @@ export function renderBrowsePage(
     .title:hover { color: #ff4500; }
     details.body { margin: 6px 0 2px; }
     details.body summary { cursor: pointer; color: #818384; font-size: 12px; }
-    details.body .md { white-space: pre-wrap; color: #c3cfd8; font-size: 13px; background: #16181a; border: 1px solid #272729; border-radius: 4px; padding: 8px 10px; margin-top: 4px; max-height: 300px; overflow-y: auto; }
+    details.body .md { white-space: pre-wrap; color: #c3cfd8; font-size: 13px; background: #16181a; border: 1px solid #272729; border-radius: 4px; padding: 8px 10px; margin-top: 4px; }
+    details.body summary { list-style: none; }
+    details.body summary::before { content: "▾ "; color: #818384; }
+    details.body:not([open]) summary::before { content: "▸ "; }
+    details.body[open] summary { margin-bottom: 2px; }
+    details.body .more { margin-top: 6px; }
+    details.body .more summary { cursor: pointer; color: #4f8cc7; font-size: 12px; padding: 2px 0; }
+    details.body .more .md { margin-top: 4px; }
     .foot { display: flex; gap: 16px; align-items: center; margin-top: 8px; font-size: 12px; color: #818384; }
     .foot .open { color: #ff4500; text-decoration: none; font-weight: 700; }
     .foot .open:hover { text-decoration: underline; }
