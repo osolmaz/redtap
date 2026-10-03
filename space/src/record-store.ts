@@ -31,6 +31,7 @@ export type PostSummary = {
   title: string | null;
   author: string | null;
   permalink: string;
+  content_href: string | null;
   post_at: number | null;
   first_seen: number;
   last_seen: number;
@@ -118,6 +119,7 @@ export class RecordStore {
         title: last.title ?? first.title ?? null,
         author: last.author ?? first.author ?? null,
         permalink: last.permalink ?? first.permalink ?? "",
+        content_href: last.content_href ?? first.content_href ?? null,
         post_at: postDateMs(sightings),
         first_seen: first.captured_at > 0 ? first.captured_at : last.captured_at,
         last_seen: last.captured_at,

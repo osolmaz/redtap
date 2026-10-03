@@ -63,7 +63,15 @@ export function createApp(config: Config, log: BucketLog, store?: RecordStore) {
 
   app.get("/", async (c) => {
     await recordStore.ensureLoaded(config.hubToken);
-    return c.html(renderBrowsePage(recordStore.posts(), c.req.query("subreddit"), c.req.query("sort"), Date.now()));
+    return c.html(
+      renderBrowsePage(recordStore.posts(), {
+        subreddit: c.req.query("subreddit"),
+        sort: c.req.query("sort"),
+        range: c.req.query("range"),
+        from: c.req.query("from"),
+        to: c.req.query("to"),
+      }, Date.now()),
+    );
   });
 
   app.get("/api/posts", async (c) => {
