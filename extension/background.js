@@ -74,9 +74,23 @@ const SCROLLER_EXTENSION_ID = 'aahdialpkbjlbfjkpamfclbnlbinekal';
 const runs = new Map();
 const runPorts = new Map();
 
+function toWire(run, records, nowMs) {
+  return records.map((record) => ({
+    cursor: (run.lastCursor += 1),
+    knownBeforeRun: Boolean(record.knownBeforeRun),
+    observedAtMs: nowMs,
+    postAt: canonicalPostAt(record.post_at, nowMs),
+    sourceEndpoint: record.source_endpoint || '/r/unknown',
+    tweetId: record.post_id,
+    captureSequence: run.nextCaptureSequence++,
+    runId: run.runId,
+    sourceTabId: run.sourceTabId,
+  }));
+}
+
 function sendObservations(port, run, records) {
-  void records;
-  port.postMessage(observationsReply(run));
+  const nowMs = Date.now();
+  port.postMessage({ type: 'scrape:observations', protocolVersion: SCRAPE_PROTOCOL_VERSION, runId: run.runId, observations: toWire(run, records, nowMs) });
 }
 
 async function bridgeLog(entry) {
@@ -160,18 +174,7 @@ function observationsReply(run) {
   run.lastCursorAtMs = Date.now();
   persistRuns();
   const nowMs = Date.now();
-  const observations = drained.map((record) => ({
-    cursor: (run.lastCursor += 1),
-    knownBeforeRun: Boolean(record.knownBeforeRun),
-    observedAtMs: nowMs,
-    postAt: canonicalPostAt(record.post_at, nowMs),
-    sourceEndpoint: record.source_endpoint || '/r/unknown',
-    tweetId: record.post_id,
-    captureSequence: run.nextCaptureSequence++,
-    runId: run.runId,
-    sourceTabId: run.sourceTabId,
-  }));
-  return { type: 'scrape:observations', protocolVersion: SCRAPE_PROTOCOL_VERSION, runId: run.runId, observations };
+  return { type: 'scrape:observations', protocolVersion: SCRAPE_PROTOCOL_VERSION, runId: run.runId, observations: toWire(run, drained, nowMs) };
 }
 
 function runsSnapshot() {
