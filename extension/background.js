@@ -526,7 +526,7 @@ async function runListingBackfill() {
 }
 
 const LISTING_ALARM = 'redtap-listing-backfill';
-chrome.alarms.create(LISTING_ALARM, { periodInMinutes: 30, delayInMinutes: 2 });
+chrome.alarms.create(LISTING_ALARM, { periodInMinutes: 120, delayInMinutes: 2 });
 chrome.alarms.onAlarm.addListener((alarm) => {
   if (alarm.name === LISTING_ALARM) void runListingBackfill();
 });
