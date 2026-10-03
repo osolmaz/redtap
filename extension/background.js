@@ -117,15 +117,21 @@ let pollRequests = 0;
 let pendingPushed = 0;
 
 // Drain the run's pending captures into a wire-shaped observations reply.
-// postAt must always parse: the client drops the whole batch otherwise.
+// postAt must be canonical UTC (Z-form) or the client drops the whole batch;
+// reddit ships +00:00 offsets, so normalize everything through Date.
+function canonicalPostAt(value, fallbackMs) {
+  const ms = typeof value === 'string' ? Date.parse(value) : NaN;
+  return Number.isFinite(ms) ? new Date(ms).toISOString() : new Date(fallbackMs).toISOString();
+}
+
 function observationsReply(run) {
   const drained = run.pending.splice(0);
-  const nowIso = new Date().toISOString();
+  const nowMs = Date.now();
   const observations = drained.map((record) => ({
     cursor: (run.lastCursor += 1),
     knownBeforeRun: Boolean(record.knownBeforeRun),
-    observedAtMs: Date.now(),
-    postAt: record.post_at || nowIso,
+    observedAtMs: nowMs,
+    postAt: canonicalPostAt(record.post_at, nowMs),
     sourceEndpoint: record.source_endpoint || '/r/unknown',
     tweetId: record.post_id,
     captureSequence: run.nextCaptureSequence++,
