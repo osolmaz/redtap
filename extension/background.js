@@ -75,18 +75,8 @@ const runs = new Map();
 const runPorts = new Map();
 
 function sendObservations(port, run, records) {
-  const observations = records.map((record, index) => ({
-    cursor: (run.lastCursor += 1),
-    knownBeforeRun: Boolean(record.knownBeforeRun),
-    observedAtMs: Date.now(),
-    postAt: record.post_at ?? '',
-    sourceEndpoint: record.source_endpoint ?? '',
-    tweetId: record.post_id,
-    captureSequence: run.nextCaptureSequence++,
-    runId: run.runId,
-    sourceTabId: run.sourceTabId,
-  }));
-  port.postMessage({ type: 'scrape:observations', protocolVersion: SCRAPE_PROTOCOL_VERSION, runId: run.runId, observations });
+  void records;
+  port.postMessage(observationsReply(run));
 }
 
 async function bridgeLog(entry) {
