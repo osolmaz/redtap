@@ -109,6 +109,35 @@ function respondRun(run) {
   return { ...run, leaseExpiresAtMs: Date.now() + 60_000, protocolVersion: SCRAPE_PROTOCOL_VERSION, pending: undefined };
 }
 
+// ------------------------------------------------------------ run persistence
+
+// The MV3 service worker idles out within seconds and the runs map dies with
+// it; the scroller then reconnects and a fresh run would reset the cursor,
+// making the client drop every redelivered observation. Persist runs and
+// restore them on re-open so cursors and pending queues survive restarts.
+const RUNS_KEY = 'bridgeRuns';
+let runsPersistTimer = null;
+
+function persistRuns() {
+  if (runsPersistTimer !== null) return;
+  runsPersistTimer = setTimeout(() => {
+    runsPersistTimer = null;
+    const payload = [...runs.values()].map((run) => ({ ...run, pending: run.pending.slice(-500) }));
+    void store.set(RUNS_KEY, payload).catch(() => {});
+  }, 250);
+}
+
+async function openRun(message) {
+  const stored = await store.get(RUNS_KEY, []);
+  const saved = (Array.isArray(stored) ? stored : []).find((run) => run?.runId === message.runId);
+  const run = saved ?? createRun(message);
+  run.state = 'running';
+  run.updatedAtMs = Date.now();
+  runs.set(run.runId, run);
+  persistRuns();
+  return run;
+}
+
 // -------------------------------------------------------- bridge counters
 
 let captureMessages = 0;
@@ -126,6 +155,7 @@ function canonicalPostAt(value, fallbackMs) {
 
 function observationsReply(run) {
   const drained = run.pending.splice(0);
+  persistRuns();
   const nowMs = Date.now();
   const observations = drained.map((record) => ({
     cursor: (run.lastCursor += 1),
@@ -173,16 +203,17 @@ chrome.runtime.onMessageExternal.addListener((message, sender, sendResponse) => 
   }
   if (message.type === 'scrape:open') {
     void bridgeLog({ event: 'msg-open', runId: message.runId });
-    const run = createRun(message);
-    runs.set(message.runId, run);
-    sendResponse({
-      type: 'scrape:opened',
-      protocolVersion: SCRAPE_PROTOCOL_VERSION,
-      runId: run.runId,
-      run: respondRun(run),
-      capabilities: ['search-timeline-observations', 'typed-errors', 'run-leases'],
-      observations: [],
-    });
+    void (async () => {
+      const run = await openRun(message);
+      sendResponse({
+        type: 'scrape:opened',
+        protocolVersion: SCRAPE_PROTOCOL_VERSION,
+        runId: run.runId,
+        run: respondRun(run),
+        capabilities: ['search-timeline-observations', 'typed-errors', 'run-leases'],
+        observations: [],
+      });
+    })();
     return;
   }
   if (message.type === 'scrape:poll') {
@@ -197,6 +228,7 @@ chrome.runtime.onMessageExternal.addListener((message, sender, sendResponse) => 
     if (run) run.state = message.state ?? 'completed';
     sendResponse({ type: 'scrape:finished', protocolVersion: SCRAPE_PROTOCOL_VERSION, runId: message.runId, run: run ? respondRun(run) : undefined });
     runs.delete(message.runId);
+    persistRuns();
     return;
   }
 });
@@ -219,22 +251,23 @@ chrome.runtime.onConnectExternal.addListener((port) => {
       return;
     }
     if (message.type === 'scrape:open') {
-      const run = createRun(message);
-      runs.set(message.runId, run);
-      runPorts.set(message.runId, port);
-      try {
-        port.postMessage({
-          type: 'scrape:opened',
-          protocolVersion: SCRAPE_PROTOCOL_VERSION,
-          runId: run.runId,
-          run: respondRun(run),
-          capabilities: ['search-timeline-observations', 'typed-errors', 'run-leases'],
-          observations: [],
-        });
-        void bridgeLog({ event: 'reply-sent', runId: run.runId });
-      } catch (err) {
-        void bridgeLog({ event: 'reply-failed', runId: run.runId, error: String(err).slice(0, 120) });
-      }
+      void (async () => {
+        const run = await openRun(message);
+        runPorts.set(run.runId, port);
+        try {
+          port.postMessage({
+            type: 'scrape:opened',
+            protocolVersion: SCRAPE_PROTOCOL_VERSION,
+            runId: run.runId,
+            run: respondRun(run),
+            capabilities: ['search-timeline-observations', 'typed-errors', 'run-leases'],
+            observations: [],
+          });
+          void bridgeLog({ event: 'reply-sent', runId: run.runId });
+        } catch (err) {
+          void bridgeLog({ event: 'reply-failed', runId: run.runId, error: String(err).slice(0, 120) });
+        }
+      })();
       return;
     }
     if (message.type === 'scrape:poll') {
@@ -259,6 +292,7 @@ chrome.runtime.onConnectExternal.addListener((port) => {
       port.postMessage({ type: 'scrape:finished', protocolVersion: SCRAPE_PROTOCOL_VERSION, runId: message.runId, run });
       runs.delete(message.runId);
       runPorts.delete(message.runId);
+      persistRuns();
       return;
     }
   });
@@ -267,6 +301,7 @@ chrome.runtime.onConnectExternal.addListener((port) => {
       if (boundPort === port) {
         runPorts.delete(runId);
         runs.delete(runId);
+        persistRuns();
       }
     }
   });
@@ -338,6 +373,7 @@ function feedBridge(stored) {
     run.pending.push(...stored);
     pendingPushed += stored.length;
   }
+  persistRuns();
   for (const [runId, port] of runPorts) {
     const run = runs.get(runId);
     if (!run || run.pending.length === 0) continue;
