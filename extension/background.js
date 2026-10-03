@@ -126,6 +126,25 @@ let capturesStored = 0;
 let pollRequests = 0;
 let pendingPushed = 0;
 
+// Drain the run's pending captures into a wire-shaped observations reply.
+// postAt must always parse: the client drops the whole batch otherwise.
+function observationsReply(run) {
+  const drained = run.pending.splice(0);
+  const nowIso = new Date().toISOString();
+  const observations = drained.map((record) => ({
+    cursor: (run.lastCursor += 1),
+    knownBeforeRun: Boolean(record.knownBeforeRun),
+    observedAtMs: Date.now(),
+    postAt: record.post_at || nowIso,
+    sourceEndpoint: record.source_endpoint || '/r/unknown',
+    tweetId: record.post_id,
+    captureSequence: run.nextCaptureSequence++,
+    runId: run.runId,
+    sourceTabId: run.sourceTabId,
+  }));
+  return { type: 'scrape:observations', protocolVersion: SCRAPE_PROTOCOL_VERSION, runId: run.runId, observations };
+}
+
 function runsSnapshot() {
   return [...runs.values()].map((run) => ({
     runId: run.runId.slice(0, 8),
@@ -143,6 +162,17 @@ chrome.runtime.onMessageExternal.addListener((message, sender, sendResponse) => 
   }
   if (!message || message.protocolVersion !== SCRAPE_PROTOCOL_VERSION) {
     sendResponse({ type: 'scrape:error', protocolVersion: SCRAPE_PROTOCOL_VERSION, runId: message?.runId ?? '', errorCode: 'invalid-request', error: 'unsupported protocol version' });
+    return;
+  }
+  if (message.type === 'scrape:poll') {
+    pollRequests += 1;
+    const run = runs.get(message.runId);
+    if (!run) {
+      sendResponse({ type: 'scrape:error', protocolVersion: SCRAPE_PROTOCOL_VERSION, runId: message.runId, errorCode: 'unknown-run', error: 'unknown run' });
+      return;
+    }
+    run.updatedAtMs = Date.now();
+    sendResponse(observationsReply(run));
     return;
   }
   if (message.type === 'scrape:open') {
@@ -165,22 +195,6 @@ chrome.runtime.onMessageExternal.addListener((message, sender, sendResponse) => 
       sendResponse({ type: 'scrape:error', protocolVersion: SCRAPE_PROTOCOL_VERSION, runId: message.runId, errorCode: 'unknown-run', error: 'unknown run' });
       return;
     }
-    run.updatedAtMs = Date.now();
-    pollRequests += 1;
-    const drained = run.pending.splice(0);
-    const observations = drained.map((record) => ({
-      cursor: (run.lastCursor += 1),
-      knownBeforeRun: Boolean(record.knownBeforeRun),
-      observedAtMs: Date.now(),
-      postAt: record.post_at ?? '',
-      sourceEndpoint: record.source_endpoint ?? '',
-      tweetId: record.post_id,
-      captureSequence: run.nextCaptureSequence++,
-      runId: run.runId,
-      sourceTabId: run.sourceTabId,
-    }));
-    sendResponse({ type: 'scrape:observations', protocolVersion: SCRAPE_PROTOCOL_VERSION, runId: run.runId, observations });
-    return;
   }
   if (message.type === 'scrape:finish') {
     const run = runs.get(message.runId);
@@ -225,6 +239,17 @@ chrome.runtime.onConnectExternal.addListener((port) => {
       } catch (err) {
         void bridgeLog({ event: 'reply-failed', runId: run.runId, error: String(err).slice(0, 120) });
       }
+      return;
+    }
+    if (message.type === 'scrape:poll') {
+      pollRequests += 1;
+      const run = runs.get(message.runId);
+      if (!run) {
+        port.postMessage({ type: 'scrape:error', protocolVersion: SCRAPE_PROTOCOL_VERSION, runId: message.runId, errorCode: 'unknown-run', error: 'unknown run' });
+        return;
+      }
+      run.updatedAtMs = Date.now();
+      port.postMessage(observationsReply(run));
       return;
     }
     if (message.type === 'scrape:heartbeat') {
