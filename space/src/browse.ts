@@ -57,9 +57,13 @@ function sortPosts(posts: PostSummary[], sort: SortKey): PostSummary[] {
 
 const BODY_LIMIT = 12_000;
 
+// Reddit was founded in June 2005; sighting times before that are garbage.
+const MIN_SANE_MS = Date.parse("2005-06-01T00:00:00.000Z");
+
 function whenLabel(p: PostSummary, now: number): string {
   if (p.post_at !== null) return ago(p.post_at, now);
-  return ago(p.first_seen, now);
+  if (p.first_seen >= MIN_SANE_MS) return ago(p.first_seen, now);
+  return "—";
 }
 
 function whenTitle(p: PostSummary): string {
