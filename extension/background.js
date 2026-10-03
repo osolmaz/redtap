@@ -434,6 +434,76 @@ function postsFromTapPayload(payload) {
 const networkCapture = new NetworkCapture({ onResponse: handleTappedResponse });
 networkCapture.attach();
 
+// --------------------------------------------------- listing backfill pages
+
+// The feed tab cannot page past reddit's logged-out cap (~500 posts), so a
+// month of a busy subreddit never fits through scrolling alone. Page the
+// public listing .json API directly: it supports `after` cursors, works
+// logged out, and each response carries full post data (created time, body,
+// score) through the same capture path as the network tap.
+
+const LISTING_SUBREDDIT = 'LocalLLaMA';
+const LISTING_DELAY_MS = 2500;
+const listingState = { lastAtMs: null, lastPages: 0, lastTotal: 0, running: false };
+
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function paginateListing(path, params, { maxPages = 15 } = {}) {
+  let after = '';
+  let pages = 0;
+  let total = 0;
+  while (pages < maxPages) {
+    const query = new URLSearchParams({ limit: '100', raw_json: '1', ...params });
+    if (after) query.set('after', after);
+    const response = await fetch('https://www.reddit.com' + path + '?' + query, { credentials: 'include' });
+    if (response.status === 403 || response.status === 404) throw new Error('listing responded ' + response.status);
+    if (!response.ok) throw new Error('listing responded ' + response.status);
+    const payload = await response.json();
+    const records = postsFromApiPayload(payload, { capturedAtMs: Date.now() });
+    if (records.length === 0) break;
+    const stored = [];
+    for (const record of records) {
+      const observation = await recordObservation(record);
+      if (observation) stored.push(observation);
+    }
+    feedBridge(stored);
+    admitRecords(stored);
+    enqueueBodyFetch(stored);
+    pages += 1;
+    total += stored.length;
+    void swLog({ event: 'listing-page', path, page: pages, stored: stored.length });
+    after = payload?.data?.after ?? '';
+    if (!after) break;
+    await sleep(LISTING_DELAY_MS);
+  }
+  return { pages, total };
+}
+
+async function runListingBackfill() {
+  if (listingState.running) return;
+  listingState.running = true;
+  try {
+    const month = await paginateListing('/r/' + LISTING_SUBREDDIT + '/top/.json', { t: 'month' }, { maxPages: 15 });
+    const fresh = await paginateListing('/r/' + LISTING_SUBREDDIT + '/new/.json', {}, { maxPages: 5 });
+    listingState.lastAtMs = Date.now();
+    listingState.lastPages = month.pages + fresh.pages;
+    listingState.lastTotal = month.total + fresh.total;
+    void swLog({ event: 'listing-backfill', month: month.total, fresh: fresh.total });
+  } catch (error) {
+    void swLog({ event: 'listing-backfill-failed', error: String(error?.message ?? error).slice(0, 120) });
+  } finally {
+    listingState.running = false;
+  }
+}
+
+const LISTING_ALARM = 'redtap-listing-backfill';
+chrome.alarms.create(LISTING_ALARM, { periodInMinutes: 30, delayInMinutes: 2 });
+chrome.alarms.onAlarm.addListener((alarm) => {
+  if (alarm.name === LISTING_ALARM) void runListingBackfill();
+});
+
 // ------------------------------------------------------- body enrichment
 
 const BODY_FETCH_DELAY_MS = 1500;
@@ -546,8 +616,12 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return;
   }
   if (message?.type === 'redtap:pool-status') {
-    sendResponse(statusSnapshot());
+    sendResponse({ ...statusSnapshot(), listing: { ...listingState } });
     return;
+  }
+  if (message?.type === 'redtap:listing-backfill-now') {
+    void runListingBackfill().then(() => sendResponse({ ok: true, listing: { ...listingState } }));
+    return true;
   }
   if (message?.type === 'redtap:pool-flush-now') {
     flushNowNow().then((n) => sendResponse({ flushed: n }));
