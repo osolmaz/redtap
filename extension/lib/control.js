@@ -29,8 +29,7 @@ async function sendTelemetry(fetchImpl, poolUrl, poolToken, heartbeat) {
   }
 }
 
-const RELOAD_GUARD_KEY = 'lastControlReloadAtMs';
-const RELOAD_GUARD_MS = 10 * 60_000;
+const APPLIED_CONTROL_KEY = 'lastAppliedControlDoc';
 
 export async function poll(getConfig, fetchImpl = globalThis.fetch, storage = globalThis.chrome?.storage?.local, heartbeat = null) {
   let poolUrl = '';
@@ -51,13 +50,14 @@ export async function poll(getConfig, fetchImpl = globalThis.fetch, storage = gl
     if (!response.ok) return;
     const control = await response.json();
     if (control?.reload !== true) return;
-    // Loop guard: a stale flag file in the bucket must not cause an endless
-    // reload cycle. Only honor the flag once per guard window.
+    // Loop guard: the flag file outlives the worker, and a fresh worker
+    // forgets in-memory guards. Reload only when the flag document actually
+    // changed since the last applied one; identical flag = no-op.
+    const stamp = JSON.stringify(control);
     if (storage) {
-      const bag = await storage.get(RELOAD_GUARD_KEY);
-      const last = bag[RELOAD_GUARD_KEY];
-      if (typeof last === 'number' && Date.now() - last < RELOAD_GUARD_MS) return;
-      await storage.set({ [RELOAD_GUARD_KEY]: Date.now() });
+      const bag = await storage.get(APPLIED_CONTROL_KEY);
+      if (bag[APPLIED_CONTROL_KEY] === stamp) return;
+      await storage.set({ [APPLIED_CONTROL_KEY]: stamp });
     }
     globalThis.chrome.runtime.reload();
   } catch {
