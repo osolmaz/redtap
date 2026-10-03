@@ -116,18 +116,17 @@ function respondRun(run) {
 // making the client drop every redelivered observation. Persist runs and
 // restore them on re-open so cursors and pending queues survive restarts.
 const RUNS_KEY = 'bridgeRuns';
-let runsPersistTimer = null;
 
 function persistRuns() {
-  if (runsPersistTimer !== null) return;
-  runsPersistTimer = setTimeout(() => {
-    runsPersistTimer = null;
-    const payload = [...runs.values()].map((run) => ({ ...run, pending: run.pending.slice(-500) }));
-    void store.set(RUNS_KEY, payload).catch(() => {});
-  }, 250);
+  const payload = [...runs.values()].map((run) => ({ ...run, pending: run.pending.slice(-500) }));
+  void store.set(RUNS_KEY, payload).catch((error) => {
+    void swLog({ event: 'runs-persist-failed', error: String(error).slice(0, 120) });
+  });
 }
 
 async function openRun(message) {
+  const existing = runs.get(message.runId);
+  if (existing) return existing;
   const stored = await store.get(RUNS_KEY, []);
   const saved = (Array.isArray(stored) ? stored : []).find((run) => run?.runId === message.runId);
   const run = saved ?? createRun(message);
