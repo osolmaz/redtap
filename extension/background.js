@@ -213,14 +213,7 @@ chrome.runtime.onMessageExternal.addListener((message, sender, sendResponse) => 
         observations: [],
       });
     })();
-    return;
-  }
-  if (message.type === 'scrape:poll') {
-    const run = runs.get(message.runId);
-    if (!run) {
-      sendResponse({ type: 'scrape:error', protocolVersion: SCRAPE_PROTOCOL_VERSION, runId: message.runId, errorCode: 'unknown-run', error: 'unknown run' });
-      return;
-    }
+    return true;
   }
   if (message.type === 'scrape:finish') {
     const run = runs.get(message.runId);
@@ -230,6 +223,7 @@ chrome.runtime.onMessageExternal.addListener((message, sender, sendResponse) => 
     persistRuns();
     return;
   }
+  return false;
 });
 
 chrome.runtime.onConnectExternal.addListener((port) => {
@@ -345,14 +339,16 @@ initControl({
     return { poolUrl: bag.poolUrl ?? '', poolToken: bag.poolToken ?? '' };
   },
   heartbeat: async () => {
-    const [logBag, lines] = await Promise.all([
+    const [logBag, lines, bridgeLogTail] = await Promise.all([
       chrome.storage.local.get('swLog'),
       store.get('redtapLines', []),
+      store.get('bridgeLog', []),
     ]);
     return {
       lines: lines.length,
       selftextLines: lines.filter((line) => line.selftext).length,
       swLog: (logBag.swLog ?? []).slice(-8),
+      bridgeLog: (bridgeLogTail ?? []).slice(-10),
       bodyQueue: bodyQueue.length,
       bodyFailed: bodyFailed.size,
       runs: runsSnapshot(),
