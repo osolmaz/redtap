@@ -25,6 +25,7 @@ export const recordSchema = z
     subreddit: z.string().nullable(),
     permalink: z.string(),
     post_type: z.string().nullable(),
+    thumb_href: z.string().nullable().optional(),
     metrics: z
       .object({
         score: z.number().nullable(),

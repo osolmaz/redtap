@@ -99,8 +99,17 @@ function bodyHtml(p: PostSummary): string {
 }
 
 function imageHtml(p: PostSummary): string {
-  if (!p.content_href || !isDirectImageUrl(p.content_href)) return "";
-  return `<a class="imglink" href="${escapeHtml(p.content_href)}" target="_blank" rel="noreferrer"><img class="thumb" src="${escapeHtml(p.content_href)}" loading="lazy" referrerpolicy="no-referrer" alt="post image" /></a>`;
+  // Direct image posts hotlink their own URL; video and gallery posts fall
+  // back to reddit's preview thumbnail.
+  const src =
+    p.content_href && isDirectImageUrl(p.content_href)
+      ? p.content_href
+      : p.thumb_href && isDirectImageUrl(p.thumb_href)
+        ? p.thumb_href
+        : null;
+  if (!src) return "";
+  const link = p.content_href ?? p.permalink;
+  return `<a class="imglink" href="${escapeHtml(link)}" target="_blank" rel="noreferrer"><img class="thumb" src="${escapeHtml(src)}" loading="lazy" referrerpolicy="no-referrer" alt="post image" /></a>`;
 }
 
 // Reddit was founded in June 2005; sighting times before that are garbage.

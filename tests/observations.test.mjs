@@ -116,6 +116,14 @@ test('recordFromApiPost normalizes a reddit t3 entry', () => {
   assert.equal('selftext' in removed, false);
 });
 
+test('recordFromApiPost keeps reddit preview thumbnails and drops placeholder ones', () => {
+  const entry = { id: 'abc', permalink: '/r/x/comments/abc/', thumbnail: 'https://preview.redd.it/pic.jpg?width=640' };
+  assert.equal(recordFromApiPost(entry).thumb_href, 'https://preview.redd.it/pic.jpg?width=640');
+  assert.equal(recordFromApiPost({ ...entry, thumbnail: 'self' }).thumb_href, null);
+  assert.equal(recordFromApiPost({ ...entry, thumbnail: 'default' }).thumb_href, null);
+  assert.equal(recordFromApiPost({ id: 'abc', permalink: '/r/x/comments/abc/' }).thumb_href, null);
+});
+
 test('postsFromApiPayload walks nested listings and dedupes', () => {
   const post = (id, extra = {}) => ({ kind: 't3', data: { id, title: 't', permalink: '/r/x/comments/' + id + '/', ...extra } });
   const payload = [{ data: { children: [post('a')] } }, { data: { children: [post('a'), post('b')] } }];

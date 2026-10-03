@@ -22,6 +22,8 @@ export type StoredRecord = {
   subreddit: string | null;
   permalink: string;
   selftext?: string | null;
+  content_href?: string | null;
+  thumb_href?: string | null;
   metrics: { score?: number | null; comments?: number | null; upvote_ratio?: number | null };
 };
 
@@ -32,6 +34,7 @@ export type PostSummary = {
   author: string | null;
   permalink: string;
   content_href: string | null;
+  thumb_href: string | null;
   post_at: number | null;
   first_seen: number;
   last_seen: number;
@@ -120,6 +123,7 @@ export class RecordStore {
         author: last.author ?? first.author ?? null,
         permalink: last.permalink ?? first.permalink ?? "",
         content_href: last.content_href ?? first.content_href ?? null,
+        thumb_href: last.thumb_href ?? first.thumb_href ?? null,
         post_at: postDateMs(sightings),
         first_seen: first.captured_at > 0 ? first.captured_at : last.captured_at,
         last_seen: last.captured_at,

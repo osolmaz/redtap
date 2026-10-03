@@ -139,6 +139,7 @@ export function recordFromApiPost(entry, context = {}) {
     post_type: entry.is_self === true ? 'self' : entry.post_hint ?? null,
     domain: typeof entry.domain === 'string' ? entry.domain : null,
     content_href: typeof entry.url_overridden_by_dest === 'string' ? entry.url_overridden_by_dest : (entry.is_self === true ? permalink : null),
+    thumb_href: typeof entry.thumbnail === 'string' && entry.thumbnail.startsWith('http') ? entry.thumbnail : null,
     view_context: null,
     award_count: typeof entry.total_awards_received === 'number' ? entry.total_awards_received : null,
     metrics: {
