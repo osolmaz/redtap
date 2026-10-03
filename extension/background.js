@@ -339,6 +339,7 @@ initControl({
     return { poolUrl: bag.poolUrl ?? '', poolToken: bag.poolToken ?? '' };
   },
   heartbeat: async () => {
+    const wall = await probeWall();
     const [logBag, lines, bridgeLogTail] = await Promise.all([
       chrome.storage.local.get('swLog'),
       store.get('redtapLines', []),
@@ -356,6 +357,7 @@ initControl({
       capturesStored,
       pollRequests,
       pendingPushed,
+      wall,
     };
   },
 });
@@ -487,6 +489,42 @@ async function fetchPostBody(item) {
     void swLog({ event: 'body-enriched', post_id: item.post_id });
   } catch (error) {
     void swLog({ event: 'body-fetch-failed', post_id: item.post_id, error: String(error?.message ?? error).slice(0, 120) });
+  }
+}
+
+// One-shot DOM probe of the attached feed tab: how is reddit's logged-out
+// join wall actually dismissable? Reported through the telemetry heartbeat.
+async function probeWall() {
+  try {
+    const targets = await new Promise((resolve, reject) => {
+      chrome.debugger.getTargets((t) => {
+        if (chrome.runtime.lastError) reject(new Error(chrome.runtime.lastError.message));
+        else resolve(t ?? []);
+      });
+    });
+    const tab = targets.find((t) => t.attached && t.tabId !== undefined && /reddit\.com/.test(t.url ?? ''));
+    if (!tab) return { attached: false };
+    const reply = await chrome.debugger.sendCommand({ tabId: tab.tabId }, 'Runtime.evaluate', {
+      returnByValue: true,
+      expression: `(() => {
+        const visible = (el) => el.checkVisibility?.() === true;
+        const closeBtns = [...document.querySelectorAll('button')]
+          .filter((b) => visible(b) && /close|dismiss/i.test((b.getAttribute('aria-label') ?? '') + ' ' + (b.getAttribute('title') ?? '')))
+          .map((b) => ({ label: b.getAttribute('aria-label'), title: b.getAttribute('title'), html: b.outerHTML.slice(0, 140) }));
+        const modal = [...document.querySelectorAll('div, section')]
+          .filter((d) => visible(d) && d.textContent?.includes('Join the most real place'))
+          .sort((a, b) => a.querySelectorAll('div').length - b.querySelectorAll('div').length)[0];
+        return JSON.stringify({
+          url: location.pathname,
+          posts: document.querySelectorAll('shreddit-post').length,
+          closeBtns: closeBtns.slice(0, 5),
+          modalButtons: modal ? [...modal.querySelectorAll('button')].slice(0, 10).map((b) => ({ label: b.getAttribute('aria-label'), text: b.textContent?.trim().slice(0, 30), visible: visible(b) })) : null,
+        });
+      })()`,
+    });
+    return { attached: true, raw: reply?.result?.value };
+  } catch (error) {
+    return { error: String(error?.message ?? error).slice(0, 140) };
   }
 }
 
