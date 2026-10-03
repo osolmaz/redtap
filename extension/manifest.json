@@ -35,7 +35,17 @@
   ],
   "action": {
     "default_popup": "popup.html",
-    "default_title": "redtap"
+    "default_title": "redtap",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "48": "icons/icon48.png",
+      "128": "icons/icon128.png"
+    }
+  },
+  "icons": {
+    "16": "icons/icon16.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
   },
   "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAtVTGH3XyaH+IksTR6f8/FieJckLSXesqFJcYWGfoy0eGZKm1UiP8qEwkSqr5DhsdqgC89qeUo350L04hLas5ayqS2jSX4D7DssGoQmCcJ89JSf8Xmh9azSlPMef//kqFgDCezdRJrSAHEwo2BL1oU/J3dqraS4IF+TN1fTacKEVHmZ6xugYIWqnd9j4EgGVqlU9Z8z0XNfZiYEnMYUuwRtu2iEhvNJzZ+xFrGP8lur2/G9IF26JjaVrWhmkcgQ61jH9AUq3ZrPTS496ZYY4THDwWiCU6JAPkgW6kLX8197CEJGuwAwaYcttZgXPsWVh1nwxM4iluN52vKhpqeL5/owIDAQAB"
 }

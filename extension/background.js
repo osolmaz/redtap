@@ -156,6 +156,27 @@ async function openRun(message) {
 // -------------------------------------------------------- bridge counters
 
 let captureMessages = 0;
+let sessionBadgeCount = 0;
+let poolSyncHealthy = true;
+
+// --- badge (xtap parity, reddit colors) ---
+
+function updateBadge() {
+  if (!poolSyncHealthy) {
+    void chrome.action.setBadgeText({ text: '!' });
+    void chrome.action.setBadgeBackgroundColor({ color: '#E0245E' });
+    return;
+  }
+  void chrome.action.setBadgeText({ text: sessionBadgeCount > 0 ? String(sessionBadgeCount) : '' });
+  void chrome.action.setBadgeBackgroundColor({ color: '#FF4500' });
+}
+
+function refreshSyncHealth() {
+  const snap = statusSnapshot();
+  poolSyncHealthy = !snap.configured || snap.lastError === null;
+  updateBadge();
+}
+setInterval(refreshSyncHealth, 30_000);
 let capturesStored = 0;
 let pollRequests = 0;
 let pendingPushed = 0;
@@ -403,6 +424,8 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     feedBridge(stored);
     admitRecords(stored);
     enqueueBodyFetch(stored);
+    sessionBadgeCount += stored.length;
+    updateBadge();
     sendResponse({ stored: stored.length });
   })();
   return true;
@@ -423,6 +446,8 @@ function handleTappedResponse({ data, url }) {
     feedBridge(stored);
     admitRecords(stored);
     enqueueBodyFetch(stored);
+    sessionBadgeCount += stored.length;
+    updateBadge();
     void swLog({ event: 'tap-capture', count: stored.length, url: String(url).slice(0, 120) });
   })();
 }
