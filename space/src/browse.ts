@@ -42,7 +42,9 @@ function deltaClass(value: number | null): string {
 function sortPosts(posts: PostSummary[], sort: SortKey): PostSummary[] {
   const sorted = [...posts];
   if (sort === "new") {
-    sorted.sort((a, b) => b.last_seen - a.last_seen);
+    sorted.sort(
+      (a, b) => (b.post_at ?? b.last_seen) - (a.post_at ?? a.last_seen),
+    );
   } else if (sort === "top") {
     sorted.sort((a, b) => (b.score_last ?? -1) - (a.score_last ?? -1));
   } else if (sort === "rising") {
@@ -54,6 +56,17 @@ function sortPosts(posts: PostSummary[], sort: SortKey): PostSummary[] {
 }
 
 const BODY_LIMIT = 12_000;
+
+function whenLabel(p: PostSummary, now: number): string {
+  if (p.post_at !== null) return ago(p.post_at, now);
+  return ago(p.first_seen, now);
+}
+
+function whenTitle(p: PostSummary): string {
+  if (p.post_at !== null)
+    return "posted " + new Date(p.post_at).toISOString().slice(0, 16).replace("T", " ") + " UTC";
+  return "first seen " + new Date(p.first_seen).toISOString().slice(0, 16).replace("T", " ") + " UTC";
+}
 
 function bodyHtml(p: PostSummary): string {
   if (!p.selftext) return "";
@@ -82,7 +95,7 @@ function card(p: PostSummary, now: number, sort: SortKey): string {
         <span class="sep">·</span>
         <span class="author">u/${escapeHtml(p.author ?? "unknown")}</span>
         <span class="sep">·</span>
-        <span class="when" title="first seen">${ago(p.first_seen, now)}</span>
+        <span class="when" title="${whenTitle(p)}">${whenLabel(p, now)}</span>
       </div>
       <a class="title" href="https://www.reddit.com${escapeHtml(p.permalink)}">${escapeHtml(p.title ?? p.post_id)}</a>
       ${body}

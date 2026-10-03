@@ -31,6 +31,7 @@ export type PostSummary = {
   title: string | null;
   author: string | null;
   permalink: string;
+  post_at: number | null;
   first_seen: number;
   last_seen: number;
   observations: number;
@@ -41,6 +42,20 @@ export type PostSummary = {
   comments_delta: number | null;
   selftext: string | null;
 };
+
+// Reddit was founded in June 2005; anything earlier is a bad parse.
+const MIN_SANE_POST_MS = Date.parse("2005-06-01T00:00:00.000Z");
+
+function postDateMs(sightings: StoredRecord[]): number | null {
+  const ceiling = Date.now() + 86_400_000;
+  for (const record of sightings) {
+    if (typeof record.post_at !== "string" || record.post_at.length === 0) continue;
+    const ms = Date.parse(record.post_at);
+    if (!Number.isFinite(ms) || ms < MIN_SANE_POST_MS || ms > ceiling) continue;
+    return ms;
+  }
+  return null;
+}
 
 export class RecordStore {
   private records = new Map<string, StoredRecord>();
@@ -103,7 +118,8 @@ export class RecordStore {
         title: last.title ?? first.title ?? null,
         author: last.author ?? first.author ?? null,
         permalink: last.permalink ?? first.permalink ?? "",
-        first_seen: first.captured_at,
+        post_at: postDateMs(sightings),
+        first_seen: first.captured_at > 0 ? first.captured_at : last.captured_at,
         last_seen: last.captured_at,
         observations: sightings.length,
         score_first: scoreFirst,
