@@ -471,7 +471,7 @@ async function paginateListing(path, params, { maxPages = 15 } = {}) {
   while (pages < maxPages) {
     const query = new URLSearchParams({ limit: '100', raw_json: '1', ...params });
     if (after) query.set('after', after);
-    const response = await redditFetch('https://www.reddit.com' + path + '?' + query);
+    const response = await fetch('https://www.reddit.com' + path + '?' + query, { credentials: 'include' });
     if (response.status === 429) {
       if (retries >= 3) throw new Error('listing rate-limited after retries');
       retries += 1;
@@ -498,7 +498,7 @@ async function paginateListing(path, params, { maxPages = 15 } = {}) {
     void swLog({ event: 'listing-page', path, page: pages, stored: stored.length });
     after = payload?.data?.after ?? '';
     if (!after) break;
-    await sleep(LISTING_DELAY_MS);
+    await sleep(REDDIT_FETCH_GAP_MS);
   }
   return { pages, total };
 }
@@ -506,6 +506,10 @@ async function paginateListing(path, params, { maxPages = 15 } = {}) {
 async function runListingBackfill() {
   if (listingState.running) return;
   listingState.running = true;
+  // The paginator fetches directly at its own pace while the body queue is
+  // paused: queued body fetches ahead of a listing page would idle the
+  // worker past MV3's 30s kill and abort the pagination mid-run.
+  bodyQueuePaused = true;
   try {
     const month = await paginateListing('/r/' + LISTING_SUBREDDIT + '/top/.json', { t: 'month' }, { maxPages: 15 });
     const fresh = await paginateListing('/r/' + LISTING_SUBREDDIT + '/new/.json', {}, { maxPages: 5 });
@@ -516,6 +520,7 @@ async function runListingBackfill() {
   } catch (error) {
     void swLog({ event: 'listing-backfill-failed', error: String(error?.message ?? error).slice(0, 120) });
   } finally {
+    bodyQueuePaused = false;
     listingState.running = false;
   }
 }
@@ -533,6 +538,7 @@ const BODY_QUEUE_MAX = 500;
 const bodyQueue = [];
 const bodyFailed = new Set();
 let bodyBusy = false;
+let bodyQueuePaused = false;
 let bodyTimer = null;
 
 function enqueueBodyFetch(records) {
@@ -558,6 +564,10 @@ async function drainBodyQueue() {
   bodyBusy = true;
   try {
     while (bodyQueue.length > 0) {
+      if (bodyQueuePaused) {
+        await new Promise((resolve) => setTimeout(resolve, 1000));
+        continue;
+      }
       const item = bodyQueue.shift();
       await fetchPostBody(item);
       await new Promise((resolve) => setTimeout(resolve, BODY_FETCH_DELAY_MS));
