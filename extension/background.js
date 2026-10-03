@@ -444,20 +444,42 @@ networkCapture.attach();
 
 const LISTING_SUBREDDIT = 'LocalLLaMA';
 const LISTING_DELAY_MS = 2500;
+const REDDIT_FETCH_GAP_MS = 3000;
 const listingState = { lastAtMs: null, lastPages: 0, lastTotal: 0, running: false };
 
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+// One rate gate for every reddit .json fetch: the listing paginator and the
+// body enrichment share reddit's per-IP budget, so uncoordinated bursts
+// from either get the whole worker rate-limited.
+let redditFetchChain = Promise.resolve();
+
+function redditFetch(url) {
+  const run = redditFetchChain.then(() => fetch(url, { credentials: 'include' }));
+  const release = run.catch(() => {}).then(() => sleep(REDDIT_FETCH_GAP_MS));
+  redditFetchChain = release;
+  return run;
+}
+
 async function paginateListing(path, params, { maxPages = 15 } = {}) {
   let after = '';
   let pages = 0;
   let total = 0;
+  let retries = 0;
   while (pages < maxPages) {
     const query = new URLSearchParams({ limit: '100', raw_json: '1', ...params });
     if (after) query.set('after', after);
-    const response = await fetch('https://www.reddit.com' + path + '?' + query, { credentials: 'include' });
+    const response = await redditFetch('https://www.reddit.com' + path + '?' + query);
+    if (response.status === 429) {
+      if (retries >= 3) throw new Error('listing rate-limited after retries');
+      retries += 1;
+      void swLog({ event: 'listing-429', page: pages + 1, retry: retries });
+      await sleep(60_000);
+      continue;
+    }
+    retries = 0;
     if (response.status === 403 || response.status === 404) throw new Error('listing responded ' + response.status);
     if (!response.ok) throw new Error('listing responded ' + response.status);
     const payload = await response.json();
@@ -548,7 +570,11 @@ async function drainBodyQueue() {
 async function fetchPostBody(item) {
   const url = 'https://www.reddit.com' + item.permalink.replace(/\/+$/, '') + '.json?limit=50&raw_json=1';
   try {
-    const response = await fetch(url, { credentials: 'include' });
+    const response = await redditFetch(url);
+    if (response.status === 429) {
+      bodyQueue.unshift(item);
+      return;
+    }
     if (response.status === 403 || response.status === 404) {
       bodyFailed.add(item.post_id);
       void swLog({ event: 'body-fetch-gone', post_id: item.post_id, status: response.status });
