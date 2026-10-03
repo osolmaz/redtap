@@ -334,6 +334,22 @@ initControl({
   },
 });
 
+// Every observation source funnels through here: the records join each open
+// scrape run's pending queue and any bound port receives them immediately.
+function feedBridge(stored) {
+  if (stored.length === 0) return;
+  for (const run of runs.values()) {
+    run.pending.push(...stored);
+    pendingPushed += stored.length;
+  }
+  for (const [runId, port] of runPorts) {
+    const run = runs.get(runId);
+    if (!run || run.pending.length === 0) continue;
+    const drained = run.pending.splice(0);
+    sendObservations(port, run, drained);
+  }
+}
+
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message?.type !== 'redtap:capture') return;
   (async () => {
@@ -344,18 +360,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       if (observation) stored.push(observation);
     }
     capturesStored += stored.length;
-    for (const run of runs.values()) {
-      if (stored.length > 0) {
-        run.pending.push(...stored);
-        pendingPushed += stored.length;
-      }
-    }
-    for (const [runId, port] of runPorts) {
-      const run = runs.get(runId);
-      if (!run || run.pending.length === 0) continue;
-      const drained = run.pending.splice(0);
-      sendObservations(port, run, drained);
-    }
+    feedBridge(stored);
     admitRecords(stored);
     enqueueBodyFetch(stored);
     sendResponse({ stored: stored.length });
@@ -375,7 +380,9 @@ function handleTappedResponse({ data, url }) {
       if (observation) stored.push(observation);
     }
     if (stored.length === 0) return;
+    feedBridge(stored);
     admitRecords(stored);
+    enqueueBodyFetch(stored);
     void swLog({ event: 'tap-capture', count: stored.length, url: String(url).slice(0, 120) });
   })();
 }
@@ -446,7 +453,10 @@ async function fetchPostBody(item) {
       return;
     }
     const observation = await recordObservation(record);
-    if (observation) admitRecords([observation]);
+    if (observation) {
+      feedBridge([observation]);
+      admitRecords([observation]);
+    }
     void swLog({ event: 'body-enriched', post_id: item.post_id });
   } catch (error) {
     void swLog({ event: 'body-fetch-failed', post_id: item.post_id, error: String(error?.message ?? error).slice(0, 120) });
