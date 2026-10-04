@@ -8,6 +8,7 @@ import { Hono } from "hono";
 import { z } from "zod";
 
 import { renderBrowsePage } from "./browse.ts";
+import { renderRss } from "./rss.ts";
 import { openBucketLog, type BucketLog } from "./bucket-log.ts";
 import { RecordStore } from "./record-store.ts";
 
@@ -61,6 +62,12 @@ export function createApp(config: Config, log: BucketLog, store?: RecordStore) {
 
   const authorized = (header: string | undefined): boolean =>
     header === `Bearer ${config.poolToken}`;
+
+  app.get("/rss.xml", (c) => {
+    return c.body(renderRss(recordStore.posts(), c.req.url.slice(0, c.req.url.indexOf("/", 8))), 200, {
+      "content-type": "application/rss+xml; charset=utf-8",
+    });
+  });
 
   app.get("/", async (c) => {
     await recordStore.ensureLoaded(config.hubToken);

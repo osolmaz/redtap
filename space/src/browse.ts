@@ -223,6 +223,7 @@ export function renderBrowsePage(
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>redtap pool</title>
+  <link rel="alternate" type="application/rss+xml" title="redtap pool" href="/rss.xml" />
   <style>
     * { box-sizing: border-box; }
     body { font: 14px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #0b1416; color: #d7dcdc; margin: 0; }
@@ -278,7 +279,7 @@ export function renderBrowsePage(
   <header>
     <div class="headrow">
       <div class="logo">redtap <span>pool</span></div>
-      <div class="count">${visible.length} posts · ${escapeHtml(String(subreddits.length))} subs</div>
+      <div class="count">${visible.length} posts · ${escapeHtml(String(subreddits.length))} subs · <a href="/rss.xml" style="color:#ff4500;text-decoration:none;font-weight:600">RSS</a></div>
       <nav class="tabs">${tabLinks}</nav>
     </div>
   </header>
