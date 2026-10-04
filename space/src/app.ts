@@ -80,7 +80,7 @@ export function createApp(config: Config, log: BucketLog, store?: RecordStore) {
 
   const favicon = readFileSync(new URL("../static/icon48.png", import.meta.url));
   app.get("/favicon.ico", (c) => c.body(new Uint8Array(favicon), 200, { "content-type": "image/png" }));
-  app.use("/static/*", serveStatic({ root: "./static" }));
+  app.use("/static/*", serveStatic({ root: "./" }));
 
   app.get("/rss.xml", async (c) => {
     await recordStore.ensureLoaded(config.hubToken);
