@@ -240,21 +240,52 @@ export function renderBrowsePage(
         ? ""
         : RANGES.find((r) => r.key === activeRange)?.label ?? "";
 
-  // Hacker-News-style day pages: a single calendar day gets prev/next nav.
-  let dayNav = "";
-  if (isDayPage) {
-    const dayMs = Date.parse(from + "T00:00:00.000Z");
-    const dayNum = Number.isFinite(dayMs) ? dayMs / 86_400_000 : NaN;
-    if (Number.isFinite(dayNum)) {
-      const fmt = (n: number): string => new Date(n * 86_400_000).toISOString().slice(0, 10);
-      const label = new Date(dayMs).toLocaleDateString("en-US", { weekday: "long", year: "numeric", month: "long", day: "numeric", timeZone: "UTC" });
-      const prev = pageUrl({ range: undefined, from: fmt(dayNum - 1), to: fmt(dayNum - 1) });
-      const next = pageUrl({ range: undefined, from: fmt(dayNum + 1), to: fmt(dayNum + 1) });
-      const nextIsFuture = fmt(dayNum + 1) > new Date(now).toISOString().slice(0, 10);
-      dayNav = `<div class="daynav">
-        <a href="${prev}">← prev day</a>
-        <span class="daytitle">${escapeHtml(label)}</span>
-        ${nextIsFuture ? `<span class="ghost">next day →</span>` : `<a href="${next}">next day →</a>`}
+  // Hacker-News-style time navigation: every browsable window (a calendar
+  // day, a custom range, or the day/week/month/year scopes) gets prev/next
+  // links that shift the window by its own length.
+  const fmtDay = (ms: number): string => new Date(ms).toISOString().slice(0, 10);
+  const fmtShort = (d: string): string => {
+    const t = new Date(d + "T00:00:00.000Z");
+    return Number.isFinite(t.getTime())
+      ? t.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" })
+      : d;
+  };
+  const DAY_MS = 86_400_000;
+  let timeNav = "";
+  {
+    const fromMs = from ? Date.parse(from + "T00:00:00.000Z") : null;
+    const toMs = to ? Date.parse(to + "T00:00:00.000Z") : null;
+    let startMs: number | null = null;
+    let windowMs: number | null = null;
+    let title = "";
+    if (fromMs !== null) {
+      const end = toMs ?? fromMs;
+      startMs = fromMs;
+      windowMs = Math.max(end - fromMs + DAY_MS, DAY_MS);
+      title =
+        from === to
+          ? new Date(fromMs).toLocaleDateString("en-US", { weekday: "long", year: "numeric", month: "long", day: "numeric", timeZone: "UTC" })
+          : `${fmtShort(from)} → ${fmtShort(to || from)}`;
+    } else {
+      const preset = RANGES.find((r) => r.key === activeRange);
+      if (preset && Number.isFinite(preset.ms) && preset.key !== "hour") {
+        startMs = now - preset.ms;
+        windowMs = preset.ms;
+        title = "past " + preset.label;
+      }
+    }
+    if (startMs !== null && windowMs !== null) {
+      const prevFrom = fmtDay(startMs - windowMs);
+      const prevTo = fmtDay(startMs - 1);
+      const prev = pageUrl({ range: undefined, from: prevFrom, to: prevTo });
+      const nextStart = startMs + windowMs;
+      const next = nextStart < now
+        ? pageUrl({ range: undefined, from: fmtDay(nextStart), to: fmtDay(Math.min(nextStart + windowMs, now) - DAY_MS) })
+        : null;
+      timeNav = `<div class="daynav">
+        <a href="${prev}">← prev</a>
+        <span class="daytitle">${escapeHtml(title)}</span>
+        ${next ? `<a href="${next}">next →</a>` : `<span class="ghost">next →</span>`}
       </div>`;
     }
   }
@@ -334,7 +365,7 @@ export function renderBrowsePage(
     </div>
   </header>
   <div class="wrap">
-    ${dayNav}
+    ${timeNav}
     <div class="scopebar">
       <span class="scopelabel">${scopeLabel ? escapeHtml(scopeLabel) : "posted"}</span>
       ${rangeLinks}
