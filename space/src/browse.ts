@@ -302,8 +302,8 @@ export function renderBrowsePage(
     * { box-sizing: border-box; }
     body { font: 14px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #0b1416; color: #d7dcdc; margin: 0; }
     header { background: #1a1a1b; border-bottom: 1px solid #343536; padding: 10px 20px; position: sticky; top: 0; z-index: 2; }
-    .headrow { display: flex; align-items: center; gap: 14px; max-width: 740px; margin: 0 auto; }
-    .logo { font-weight: 700; font-size: 17px; color: #ff4500; letter-spacing: -0.5px; }
+    .headrow { display: flex; align-items: center; flex-wrap: wrap; gap: 6px 14px; max-width: 760px; margin: 0 auto; }
+    .logo { font-weight: 700; font-size: 17px; color: #ff4500; letter-spacing: -0.5px; white-space: nowrap; }
     .logo span { color: #d7dcdc; }
     .count { color: #818384; font-size: 12px; }
     .tabs { display: flex; gap: 4px; margin-left: auto; }
@@ -337,15 +337,24 @@ export function renderBrowsePage(
     .meta .sub { color: #d7dcdc; text-decoration: none; font-weight: 700; }
     .meta .sub:hover { color: #ff4500; }
     .meta .sep { margin: 0 4px; }
-    .title { display: inline-block; color: #d7dcdc; text-decoration: none; font-size: 17px; font-weight: 500; line-height: 1.35; margin: 2px 0 6px; }
+    .title { display: inline-block; color: #d7dcdc; text-decoration: none; font-size: 17px; font-weight: 500; line-height: 1.35; margin: 2px 0 6px; overflow-wrap: anywhere; }
     .title:hover { color: #ff4500; }
     .imglink { display: block; margin: 8px 0 4px; }
     .thumb { display: block; max-width: min(100%, 560px); max-height: 460px; border-radius: 6px; border: 1px solid #343536; }
-    .md { white-space: pre-wrap; color: #c3cfd8; font-size: 13px; margin-top: 6px; }
+    .md { white-space: pre-wrap; color: #c3cfd8; font-size: 13px; margin-top: 6px; overflow-wrap: anywhere; }
     details.more { margin-top: 2px; }
     details.more summary { cursor: pointer; color: #4f8cc7; font-size: 12px; padding: 4px 0; }
     details.more .md { margin-top: 4px; }
-    .foot { display: flex; gap: 16px; align-items: center; margin-top: 10px; font-size: 12px; color: #818384; }
+    .foot { display: flex; gap: 16px; align-items: center; flex-wrap: wrap; margin-top: 10px; font-size: 12px; color: #818384; }
+    @media (max-width: 480px) {
+      .wrap { padding: 0 8px; }
+      .post { padding: 8px 10px; gap: 8px; }
+      .vote { width: 38px; }
+      .title { font-size: 16px; }
+      .thumb { max-width: 100%; max-height: 380px; }
+      .tabs a { padding: 5px 10px; }
+      .custom input[type="date"] { flex: 1; min-width: 0; }
+    }
     .foot .open { color: #ff4500; text-decoration: none; font-weight: 700; }
     .foot .open:hover { text-decoration: underline; }
     .empty { color: #818384; text-align: center; padding: 40px 0; }
