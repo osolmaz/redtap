@@ -98,13 +98,16 @@ function bodyHtml(p: PostSummary): string {
 <details class="more"><summary>show remaining ${(text.length - BODY_LIMIT).toLocaleString("en-US")} characters</summary><div class="md">${escapeHtml(text.slice(BODY_LIMIT))}</div></details>`;
 }
 
+const MEDIA_HINT = /video|gallery|image|rich/i;
+
 function imageHtml(p: PostSummary): string {
   // Direct image posts hotlink their own URL; video and gallery posts fall
-  // back to reddit's preview thumbnail.
+  // back to reddit's preview thumbnail. Plain link posts get no image —
+  // their previews are tiny cards that read as page noise.
   const src =
     p.content_href && isDirectImageUrl(p.content_href)
       ? p.content_href
-      : p.thumb_href && isDirectImageUrl(p.thumb_href)
+      : p.post_type && MEDIA_HINT.test(p.post_type) && p.thumb_href && isDirectImageUrl(p.thumb_href)
         ? p.thumb_href
         : null;
   if (!src) return "";
@@ -236,9 +239,10 @@ export function renderBrowsePage(
     .tabs a { color: #818384; text-decoration: none; font-size: 13px; font-weight: 700; padding: 6px 12px; border-radius: 999px; }
     .tabs a.on { background: #272729; color: #ff4500; }
     .tabs a:hover { color: #d7dcdc; }
-    .wrap { max-width: 740px; margin: 16px auto; padding: 0 12px; }
-    .scopebar { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; }
-    .scopelabel { color: #818384; font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; margin-right: 2px; }
+    .wrap { max-width: 760px; margin: 16px auto; padding: 0 12px; }
+    .scopebar { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; row-gap: 8px; margin-bottom: 10px; }
+    .custom { flex-basis: 100%; }
+    .scopelabel { color: #818384; font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; margin-right: 4px; }
     .pill { color: #818384; text-decoration: none; font-size: 12px; border: 1px solid #343536; background: #1a1a1b; padding: 4px 10px; border-radius: 999px; }
     .pill.on { color: #ff4500; border-color: #ff4500; }
     .pill:hover { color: #d7dcdc; }
@@ -246,30 +250,31 @@ export function renderBrowsePage(
     .custom input[type="date"] { background: #1a1a1b; color: #d7dcdc; border: 1px solid #343536; border-radius: 6px; font-size: 12px; padding: 3px 6px; color-scheme: dark; }
     .custom button { background: #272729; color: #d7dcdc; border: 1px solid #343536; border-radius: 6px; font-size: 12px; padding: 4px 10px; cursor: pointer; }
     .custom button:hover { color: #ff4500; }
-    .post { display: flex; gap: 8px; background: #1a1a1b; border: 1px solid #343536; border-radius: 4px; margin-bottom: 10px; padding: 8px; }
+    .pills { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 12px; }
+    .post { display: flex; gap: 10px; background: #1a1a1b; border: 1px solid #343536; border-radius: 6px; margin-bottom: 12px; padding: 10px 12px; }
     .post:hover { border-color: #565758; }
-    .vote { width: 40px; flex: none; text-align: center; font-size: 12px; color: #d7dcdc; padding-top: 4px; }
-    .vote .arrow { color: #ff4500; font-size: 14px; line-height: 1.1; }
-    .vote .score { font-weight: 700; font-size: 13px; }
-    .vote .diff { font-size: 11px; }
+    .vote { width: 44px; flex: none; text-align: center; font-size: 12px; color: #d7dcdc; padding-top: 6px; }
+    .vote .arrow { color: #ff4500; font-size: 13px; line-height: 1; margin-bottom: 3px; }
+    .vote .score { font-weight: 700; font-size: 13px; line-height: 1.3; }
+    .vote .diff { font-size: 11px; line-height: 1.5; }
     .vote .diff.up { color: #4ade80; }
     .vote .diff.down { color: #f87171; }
     .vote .diff.flat { color: #343536; }
     .vote .sightings { color: #818384; font-size: 10px; margin-top: 4px; }
     .content { flex: 1; min-width: 0; }
-    .meta { color: #818384; font-size: 12px; margin-bottom: 4px; }
+    .meta { color: #818384; font-size: 12px; margin-bottom: 6px; }
     .meta .sub { color: #d7dcdc; text-decoration: none; font-weight: 700; }
     .meta .sub:hover { color: #ff4500; }
     .meta .sep { margin: 0 4px; }
-    .title { display: inline-block; color: #d7dcdc; text-decoration: none; font-size: 17px; font-weight: 500; margin: 2px 0 4px; }
+    .title { display: inline-block; color: #d7dcdc; text-decoration: none; font-size: 17px; font-weight: 500; line-height: 1.35; margin: 2px 0 6px; }
     .title:hover { color: #ff4500; }
-    .imglink { display: block; margin: 6px 0 2px; }
-    .thumb { display: block; max-width: 100%; max-height: 512px; border-radius: 4px; }
+    .imglink { display: block; margin: 8px 0 4px; }
+    .thumb { display: block; max-width: min(100%, 560px); max-height: 460px; border-radius: 6px; border: 1px solid #343536; }
     .md { white-space: pre-wrap; color: #c3cfd8; font-size: 13px; margin-top: 6px; }
     details.more { margin-top: 2px; }
     details.more summary { cursor: pointer; color: #4f8cc7; font-size: 12px; padding: 4px 0; }
     details.more .md { margin-top: 4px; }
-    .foot { display: flex; gap: 16px; align-items: center; margin-top: 8px; font-size: 12px; color: #818384; }
+    .foot { display: flex; gap: 16px; align-items: center; margin-top: 10px; font-size: 12px; color: #818384; }
     .foot .open { color: #ff4500; text-decoration: none; font-weight: 700; }
     .foot .open:hover { text-decoration: underline; }
     .empty { color: #818384; text-align: center; padding: 40px 0; }
@@ -279,7 +284,7 @@ export function renderBrowsePage(
   <header>
     <div class="headrow">
       <div class="logo">redtap <span>pool</span></div>
-      <div class="count">${visible.length} posts · ${escapeHtml(String(subreddits.length))} subs · <a href="/rss.xml" style="color:#ff4500;text-decoration:none;font-weight:600">RSS</a></div>
+      <div class="count">${visible.length} posts · ${subreddits.length === 1 ? "1 sub" : subreddits.length + " subs"} · <a href="/rss.xml" style="color:#ff4500;text-decoration:none;font-weight:600">RSS</a></div>
       <nav class="tabs">${tabLinks}</nav>
     </div>
   </header>
