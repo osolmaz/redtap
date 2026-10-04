@@ -63,8 +63,10 @@ export function createApp(config: Config, log: BucketLog, store?: RecordStore) {
   const authorized = (header: string | undefined): boolean =>
     header === `Bearer ${config.poolToken}`;
 
-  app.get("/rss.xml", (c) => {
-    return c.body(renderRss(recordStore.posts(), c.req.url.slice(0, c.req.url.indexOf("/", 8))), 200, {
+  app.get("/rss.xml", async (c) => {
+    await recordStore.ensureLoaded(config.hubToken);
+    const origin = c.req.url.slice(0, c.req.url.indexOf("/", 8)).replace(/^http:/, "https:");
+    return c.body(renderRss(recordStore.posts(), origin), 200, {
       "content-type": "application/rss+xml; charset=utf-8",
     });
   });
