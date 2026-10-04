@@ -23,11 +23,13 @@ function stripHtml(text: string): string {
     .trim();
 }
 
-/** RSS 2.0 feed of the newest posts in the pool. */
+/** RSS 2.0 feed of the pool's daily hot ranking: the last 24h of posts
+ *  ranked by score gained since first sighting. */
 export function renderRss(posts: PostSummary[], origin: string): string {
+  const cutoff = Date.now() - 24 * 3600_000;
   const newest = posts
-    .filter((p) => p.post_at !== null)
-    .sort((a, b) => (b.post_at ?? 0) - (a.post_at ?? 0))
+    .filter((p) => (p.post_at ?? 0) >= cutoff)
+    .sort((a, b) => (b.score_delta ?? b.score_last ?? 0) - (a.score_delta ?? a.score_last ?? 0))
     .slice(0, RSS_LIMIT);
   const items = newest
     .map((p) => {
@@ -50,9 +52,9 @@ export function renderRss(posts: PostSummary[], origin: string): string {
   return `<?xml version="1.0" encoding="UTF-8"?>
 <rss version="2.0">
   <channel>
-    <title>redtap pool — r/LocalLLaMA</title>
+    <title>redtap pool — r/LocalLLaMA (daily hot)</title>
     <link>${xmlEscape(origin)}/</link>
-    <description>The newest captured posts from the redtap pool</description>
+    <description>Today's hottest posts in the redtap pool, ranked by score gained</description>
     <lastBuildDate>${rfc822(Date.now())}</lastBuildDate>
 ${items}
   </channel>

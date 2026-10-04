@@ -180,7 +180,7 @@ export function renderBrowsePage(
   const activeSort: SortKey = SORTS.some((s) => s.key === query.sort) ? (query.sort as SortKey) : "hot";
   const activeRange: RangeKey = RANGES.some((r) => r.key === query.range)
     ? (query.range as RangeKey)
-    : "all";
+    : "day";
   const from = /^\d{4}-\d{2}-\d{2}$/.test(query.from ?? "") ? (query.from as string) : "";
   const to = /^\d{4}-\d{2}-\d{2}$/.test(query.to ?? "") ? (query.to as string) : "";
   pageState = {

@@ -19,8 +19,16 @@ const store = {
   },
 };
 
+function subAllowed(subreddit) {
+  const subs = (statusSnapshot().subs ?? ['LocalLLaMA']).map((s) => String(s).toLowerCase());
+  if (typeof subreddit !== 'string' || subreddit === '') return true; // unknown source: let the store dedupe
+  const bare = subreddit.replace(/^r\//i, '').toLowerCase();
+  return subs.includes(bare);
+}
+
 async function recordObservation(record) {
   if (!record || !record.post_id) return null;
+  if (!subAllowed(record.subreddit)) return null;
   const observation = { ...record, observation_id: await observationId(record) };
   const state = await store.get('redtapState', { samples: {}, exportedIds: [] });
   const samples = state.samples ?? {};
@@ -467,7 +475,6 @@ networkCapture.attach();
 // logged out, and each response carries full post data (created time, body,
 // score) through the same capture path as the network tap.
 
-const LISTING_SUBREDDIT = 'LocalLLaMA';
 const LISTING_DELAY_MS = 2500;
 const REDDIT_FETCH_GAP_MS = 3000;
 const listingState = { lastAtMs: null, lastPages: 0, lastTotal: 0, running: false };
@@ -536,8 +543,9 @@ async function runListingBackfill() {
   // worker past MV3's 30s kill and abort the pagination mid-run.
   bodyQueuePaused = true;
   try {
-    const month = await paginateListing('/r/' + LISTING_SUBREDDIT + '/top/.json', { t: 'month' }, { maxPages: 15 });
-    const fresh = await paginateListing('/r/' + LISTING_SUBREDDIT + '/new/.json', {}, { maxPages: 5 });
+    const sub = (statusSnapshot().subs ?? ['LocalLLaMA'])[0] ?? 'LocalLLaMA';
+    const month = await paginateListing('/r/' + sub + '/top/.json', { t: 'month' }, { maxPages: 15 });
+    const fresh = await paginateListing('/r/' + sub + '/new/.json', {}, { maxPages: 5 });
     listingState.lastAtMs = Date.now();
     listingState.lastPages = month.pages + fresh.pages;
     listingState.lastTotal = month.total + fresh.total;

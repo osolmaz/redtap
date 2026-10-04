@@ -45,6 +45,7 @@ const ingestSchema = z.object({
 export type Config = Readonly<{
   poolToken: string;
   hubToken: string;
+  poolSubreddits?: string;
 }>;
 
 export function createApp(config: Config, log: BucketLog, store?: RecordStore) {
@@ -52,6 +53,18 @@ export function createApp(config: Config, log: BucketLog, store?: RecordStore) {
   const seen = new Set<string>();
   let seenLoaded = false;
   const recordStore = store ?? new RecordStore();
+
+  // The pool serves one configured subreddit focus (default r/LocalLLaMA).
+  const poolSubreddits = (config.poolSubreddits ?? "LocalLLaMA")
+    .split(",")
+    .map((s) => s.trim().replace(/^r\//i, "").toLowerCase())
+    .filter(Boolean);
+  const inPool = (p: { subreddit: string | null }): boolean => {
+    if (p.subreddit === null || p.subreddit === "") return false;
+    const bare = p.subreddit.replace(/^r\//i, "").toLowerCase();
+    return poolSubreddits.includes(bare);
+  };
+  const visiblePosts = () => recordStore.posts().filter(inPool);
 
   const ensureSeen = async (): Promise<void> => {
     if (seenLoaded) return;
@@ -66,7 +79,7 @@ export function createApp(config: Config, log: BucketLog, store?: RecordStore) {
   app.get("/rss.xml", async (c) => {
     await recordStore.ensureLoaded(config.hubToken);
     const origin = c.req.url.slice(0, c.req.url.indexOf("/", 8)).replace(/^http:/, "https:");
-    return c.body(renderRss(recordStore.posts(), origin), 200, {
+    return c.body(renderRss(visiblePosts(), origin), 200, {
       "content-type": "application/rss+xml; charset=utf-8",
     });
   });
@@ -74,7 +87,7 @@ export function createApp(config: Config, log: BucketLog, store?: RecordStore) {
   app.get("/", async (c) => {
     await recordStore.ensureLoaded(config.hubToken);
     return c.html(
-      renderBrowsePage(recordStore.posts(), {
+      renderBrowsePage(visiblePosts(), {
         subreddit: c.req.query("subreddit"),
         sort: c.req.query("sort"),
         range: c.req.query("range"),
@@ -86,7 +99,7 @@ export function createApp(config: Config, log: BucketLog, store?: RecordStore) {
 
   app.get("/api/posts", async (c) => {
     await recordStore.ensureLoaded(config.hubToken);
-    return c.json({ posts: recordStore.posts() });
+    return c.json({ posts: visiblePosts() });
   });
 
   app.get("/api/status", async (c) => {

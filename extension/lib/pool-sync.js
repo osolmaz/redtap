@@ -10,10 +10,11 @@ const MAX_BATCH = 400;
 const FLUSH_DEBOUNCE_MS = 20_000;
 const BACKOFF_BASE_MS = 30_000;
 const BACKOFF_MAX_MS = 15 * 60_000;
-export const CONFIG_KEYS = ['poolUrl', 'poolToken', 'poolPaused', 'poolStats'];
+export const CONFIG_KEYS = ['poolUrl', 'poolToken', 'poolPaused', 'poolSubs', 'poolStats'];
+export const DEFAULT_SUBS = ['LocalLLaMA'];
 
 let queue = [];
-let config = { poolUrl: '', poolToken: '', poolPaused: false };
+let config = { poolUrl: '', poolToken: '', poolPaused: false, subs: DEFAULT_SUBS };
 let stats = { synced: 0, queued: 0, lastError: null, lastSyncAt: null };
 let flushTimer = null;
 let backoffMs = 0;
@@ -30,6 +31,7 @@ async function loadState() {
     poolUrl: typeof bag.poolUrl === 'string' ? bag.poolUrl : '',
     poolToken: typeof bag.poolToken === 'string' ? bag.poolToken : '',
     poolPaused: bag.poolPaused === true,
+    subs: parseSubs(bag.poolSubs) ?? DEFAULT_SUBS,
   };
   stats = bag.poolStats ?? stats;
 }
@@ -59,7 +61,14 @@ export function isConfigured() {
 }
 
 export function statusSnapshot() {
-  return { ...stats, queued: queue.length, paused: config.poolPaused, configured: isConfigured() };
+  return { ...stats, queued: queue.length, paused: config.poolPaused, configured: isConfigured(), subs: config.subs };
+}
+
+/** 'r/LocalLLaMA, askReddit' -> ['LocalLLaMA', 'AskReddit']; null when unset. */
+export function parseSubs(raw) {
+  if (typeof raw !== 'string' || raw.trim() === '') return null;
+  const subs = raw.split(',').map((s) => s.trim().replace(/^r\//i, '')).filter((s) => s.length > 0);
+  return subs.length > 0 ? subs : null;
 }
 
 export async function flushNowNow() {
@@ -71,11 +80,14 @@ export async function flushNowNow() {
 }
 
 export function setConfig(next, flushNowFlag = false) {
-  config = { ...config, ...next };
+  const patch = { ...next };
+  if (Array.isArray(patch.subs) && patch.subs.length === 0) delete patch.subs;
+  config = { ...config, ...patch };
   void storage().set({
     poolUrl: config.poolUrl,
     poolToken: config.poolToken,
     poolPaused: config.poolPaused,
+    poolSubs: (config.subs ?? DEFAULT_SUBS).join(','),
     poolStats: stats,
   });
   if (flushNowFlag) scheduleFlush(200);
