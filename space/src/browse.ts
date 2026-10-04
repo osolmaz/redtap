@@ -162,17 +162,30 @@ function card(p: PostSummary, now: number, sort: SortKey): string {
 }
 
 // URL builder preserving the active scope across navigation links.
-let pageState: Required<BrowseQuery> = { subreddit: "", sort: "hot", range: "all", from: "", to: "" };
+let pageState: Required<BrowseQuery> = { subreddit: "", sort: "hot", range: "day", from: "", to: "" };
 
-function pageUrl(overrides: Partial<BrowseQuery>): string {
+/** Reddit-style path for the current scope: /r/{sub}/{sort}/{range|from/to}/.
+ *  Defaults (hot, day, no sub) stay out of the path. */
+export function pageUrl(overrides: Partial<BrowseQuery>): string {
   const merged = { ...pageState, ...overrides };
   const parts: string[] = [];
-  if (merged.subreddit) parts.push("subreddit=" + encodeURIComponent(merged.subreddit));
-  if (merged.sort && merged.sort !== "hot") parts.push("sort=" + merged.sort);
-  if (merged.range && merged.range !== "all") parts.push("range=" + merged.range);
-  if (merged.from) parts.push("from=" + merged.from);
-  if (merged.to) parts.push("to=" + merged.to);
-  return "?" + (parts.join("&amp;") || "");
+  if (merged.subreddit) parts.push("r/" + merged.subreddit.replace(/^r\//i, ""));
+  if (merged.sort && merged.sort !== "hot") parts.push(merged.sort);
+  if (merged.from) {
+    parts.push(merged.from);
+    if (merged.to && merged.to !== merged.from) parts.push(merged.to);
+  } else if (merged.range && merged.range !== "day") {
+    parts.push(merged.range);
+  }
+  return "/" + (parts.join("/") ? parts.join("/") + "/" : "");
+}
+
+/** Path prefix for form actions: the scope without the date tail. */
+function scopeUrl(): string {
+  const parts: string[] = [];
+  if (pageState.subreddit) parts.push("r/" + pageState.subreddit.replace(/^r\//i, ""));
+  if (pageState.sort && pageState.sort !== "hot") parts.push(pageState.sort);
+  return "/" + (parts.join("/") ? parts.join("/") + "/" : "");
 }
 
 export function renderBrowsePage(
@@ -181,19 +194,24 @@ export function renderBrowsePage(
   now: number,
 ): string {
   const activeSort: SortKey = SORTS.some((s) => s.key === query.sort) ? (query.sort as SortKey) : "hot";
-  const activeRange: RangeKey = RANGES.some((r) => r.key === query.range)
-    ? (query.range as RangeKey)
-    : "day";
   const from = /^\d{4}-\d{2}-\d{2}$/.test(query.from ?? "") ? (query.from as string) : "";
   const to = /^\d{4}-\d{2}-\d{2}$/.test(query.to ?? "") ? (query.to as string) : "";
+  const hasDates = from !== "" || to !== "";
+  // Explicit dates replace the preset range entirely; the default is daily.
+  const activeRange: RangeKey = hasDates
+    ? "all"
+    : RANGES.some((r) => r.key === query.range)
+      ? (query.range as RangeKey)
+      : "day";
   pageState = {
     subreddit: query.subreddit ?? "",
     sort: activeSort,
     range: activeRange,
     from,
-    to,
+    to: from !== "" && (to === from || to === "") ? from : to,
   };
 
+  const isDayPage = from !== "" && (to === from || to === "");
   const subreddits = [...new Set(posts.map((p) => p.subreddit).filter((s): s is string => s !== null))].sort();
   const visible = filterPosts(posts, now);
 
@@ -214,11 +232,32 @@ export function renderBrowsePage(
     ),
   ).join("");
   const scopeLabel =
-    from || to
-      ? `${from || "…"} → ${to || "…"}`
-      : activeRange === "all"
+    isDayPage
+      ? ""
+      : from || to
+        ? `${from || "…"} → ${to || "…"}`
+        : activeRange === "all"
         ? ""
         : RANGES.find((r) => r.key === activeRange)?.label ?? "";
+
+  // Hacker-News-style day pages: a single calendar day gets prev/next nav.
+  let dayNav = "";
+  if (isDayPage) {
+    const dayMs = Date.parse(from + "T00:00:00.000Z");
+    const dayNum = Number.isFinite(dayMs) ? dayMs / 86_400_000 : NaN;
+    if (Number.isFinite(dayNum)) {
+      const fmt = (n: number): string => new Date(n * 86_400_000).toISOString().slice(0, 10);
+      const label = new Date(dayMs).toLocaleDateString("en-US", { weekday: "long", year: "numeric", month: "long", day: "numeric", timeZone: "UTC" });
+      const prev = pageUrl({ range: undefined, from: fmt(dayNum - 1), to: fmt(dayNum - 1) });
+      const next = pageUrl({ range: undefined, from: fmt(dayNum + 1), to: fmt(dayNum + 1) });
+      const nextIsFuture = fmt(dayNum + 1) > new Date(now).toISOString().slice(0, 10);
+      dayNav = `<div class="daynav">
+        <a href="${prev}">← prev day</a>
+        <span class="daytitle">${escapeHtml(label)}</span>
+        ${nextIsFuture ? `<span class="ghost">next day →</span>` : `<a href="${next}">next day →</a>`}
+      </div>`;
+    }
+  }
 
   return `<!doctype html>
 <html>
@@ -278,6 +317,11 @@ export function renderBrowsePage(
     .foot .open { color: #ff4500; text-decoration: none; font-weight: 700; }
     .foot .open:hover { text-decoration: underline; }
     .empty { color: #818384; text-align: center; padding: 40px 0; }
+    .daynav { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 4px 0 12px; font-size: 13px; }
+    .daynav a { color: #4f8cc7; text-decoration: none; }
+    .daynav a:hover { color: #ff4500; }
+    .daynav .daytitle { color: #d7dcdc; font-weight: 700; }
+    .daynav .ghost { color: #343536; }
   </style>
 </head>
 <body>
@@ -289,10 +333,11 @@ export function renderBrowsePage(
     </div>
   </header>
   <div class="wrap">
+    ${dayNav}
     <div class="scopebar">
       <span class="scopelabel">${scopeLabel ? escapeHtml(scopeLabel) : "posted"}</span>
       ${rangeLinks}
-      <form class="custom" method="get" action="/">
+      <form class="custom" method="get" action="${scopeUrl()}">
         <input type="hidden" name="sort" value="${activeSort}" />
         ${pageState.subreddit ? `<input type="hidden" name="subreddit" value="${escapeHtml(pageState.subreddit)}" />` : ""}
         <input type="date" name="from" value="${from}" />

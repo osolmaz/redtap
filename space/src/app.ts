@@ -84,18 +84,6 @@ export function createApp(config: Config, log: BucketLog, store?: RecordStore) {
     });
   });
 
-  app.get("/", async (c) => {
-    await recordStore.ensureLoaded(config.hubToken);
-    return c.html(
-      renderBrowsePage(visiblePosts(), {
-        subreddit: c.req.query("subreddit"),
-        sort: c.req.query("sort"),
-        range: c.req.query("range"),
-        from: c.req.query("from"),
-        to: c.req.query("to"),
-      }, Date.now()),
-    );
-  });
 
   app.get("/api/posts", async (c) => {
     await recordStore.ensureLoaded(config.hubToken);
@@ -141,6 +129,42 @@ export function createApp(config: Config, log: BucketLog, store?: RecordStore) {
       controlCache = { at: Date.now(), doc: await log.readControl() };
     }
     return c.json(controlCache.doc ?? {});
+  });
+
+  // Reddit-style browse paths: /r/{sub}/{sort}/{range}/ with word ranges
+  // (hour..all) or a custom date pair in the path: /r/{sub}/hot/2026-10-01/2026-10-03/.
+  // Root shortcuts work too: /new, /top/week. Query params still fill gaps
+  // (the date form GETs ?from=&to= onto the scope path).
+  const SORT_KEYS = ["hot", "new", "top", "rising"];
+  const RANGE_KEYS = ["hour", "day", "week", "month", "year", "all"];
+  const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+  app.get("*", async (c) => {
+    await recordStore.ensureLoaded(config.hubToken);
+    const seg = c.req.path.split("/").filter(Boolean);
+    let subreddit = "";
+    let sort: string | undefined;
+    let range: string | undefined;
+    const dates: string[] = [];
+    if (seg[0] === "r" && seg[1]) {
+      subreddit = "r/" + seg[1];
+      seg.splice(0, 2);
+    }
+    for (const s of seg) {
+      if (!sort && SORT_KEYS.includes(s)) sort = s;
+      else if (!range && dates.length === 0 && RANGE_KEYS.includes(s)) range = s;
+      else if (dates.length < 2 && DATE_RE.test(s)) dates.push(s);
+    }
+    // A single date segment is a Hacker-News-style day page: that day only.
+    if (dates.length === 1) dates.push(dates[0]);
+    return c.html(
+      renderBrowsePage(visiblePosts(), {
+        subreddit: c.req.query("subreddit") ?? subreddit,
+        sort: c.req.query("sort") ?? sort,
+        range: dates.length > 0 ? undefined : (c.req.query("range") ?? range),
+        from: c.req.query("from") ?? dates[0],
+        to: c.req.query("to") ?? dates[1],
+      }, Date.now()),
+    );
   });
 
   app.post("/api/ingest", async (c) => {
