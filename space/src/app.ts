@@ -5,6 +5,8 @@
 // private Bucket log. Single-pool edition: the pool token is the Space's
 // POOL_TOKEN secret, saved once in the extension's options.
 import { Hono } from "hono";
+import { serveStatic } from "@hono/node-server/serve-static";
+import { readFileSync } from "node:fs";
 import { z } from "zod";
 
 import { renderBrowsePage } from "./browse.ts";
@@ -75,6 +77,10 @@ export function createApp(config: Config, log: BucketLog, store?: RecordStore) {
 
   const authorized = (header: string | undefined): boolean =>
     header === `Bearer ${config.poolToken}`;
+
+  const favicon = readFileSync(new URL("../static/icon48.png", import.meta.url));
+  app.get("/favicon.ico", (c) => c.body(new Uint8Array(favicon), 200, { "content-type": "image/png" }));
+  app.use("/static/*", serveStatic({ root: "./static" }));
 
   app.get("/rss.xml", async (c) => {
     await recordStore.ensureLoaded(config.hubToken);
