@@ -365,8 +365,12 @@ void (async () => {
       if (!line?.post_id) continue;
       latest.set(line.post_id, line);
     }
+    // Bodyless posts, plus long bodies captured before the newline fix:
+    // a flattened single-paragraph body longer than a paragraph is worth
+    // re-fetching once so markdown structure repairs itself.
+    const needsBody = (record) => !record.selftext || (record.selftext.length > 400 && !record.selftext.includes('\n'));
     const bodyless = [...latest.values()]
-      .filter((record) => !record.selftext && record.permalink)
+      .filter((record) => needsBody(record) && record.permalink)
       .map((record) => ({ post_id: record.post_id, permalink: record.permalink }));
     enqueueBodyFetch(bodyless);
     await swLog({ event: 'boot-body-enrich', count: bodyless.length });
