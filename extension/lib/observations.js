@@ -72,7 +72,8 @@ export function parseTimestamp(value) {
 /** Body text from a rendered post page or rich feed preview, if present. */
 export function extractSelftext(element) {
   const body = element?.querySelector?.('[slot="text-body"]')?.textContent ?? '';
-  const text = body.replace(/\s+/g, ' ').trim();
+  // Collapse runs of spaces but keep line breaks: markdown structure lives in them.
+  const text = body.split('\n').map((l) => l.replace(/[ \t]+/g, ' ').trim()).join('\n').replace(/\n{3,}/g, '\n\n').trim();
   return text.length > 0 ? text.slice(0, 20_000) : null;
 }
 
@@ -121,7 +122,8 @@ export function recordFromApiPost(entry, context = {}) {
   const permalink = typeof entry.permalink === 'string' && entry.permalink.length > 0 ? entry.permalink : null;
   if (!id || !permalink) return null;
   const createdMs = typeof entry.created_utc === 'number' && Number.isFinite(entry.created_utc) ? entry.created_utc * 1000 : null;
-  const selftext = typeof entry.selftext === 'string' ? entry.selftext.replace(/\s+/g, ' ').trim().slice(0, 20_000) : '';
+  // Keep line breaks (markdown structure); collapse only horizontal space.
+  const selftext = typeof entry.selftext === 'string' ? entry.selftext.replace(/[ \t]+/g, ' ').replace(/\n{3,}/g, '\n\n').trim().slice(0, 20_000) : '';
   const hasBody = selftext.length > 0 && selftext !== '[removed]' && selftext !== '[deleted]';
   const record = {
     post_id: id,

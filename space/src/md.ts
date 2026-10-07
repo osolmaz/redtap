@@ -43,7 +43,7 @@ function inline(text: string): string {
 
 /** Render a reddit markdown body to safe HTML. */
 export function renderMarkdown(source: string): string {
-  const blocks = source.replaceAll(/\r\n/g, "\n").split(/\n{2,}/);
+  const blocks = source.replaceAll(/\r\n/g, "\n").split(/\n{2,}/).map((b) => b.trim());
   const html: string[] = [];
   for (const raw of blocks) {
     const block = raw.trim();
@@ -67,7 +67,7 @@ export function renderMarkdown(source: string): string {
         .split("\n")
         .map((l) => l.replace(/^&gt;\s?/, "").replace(/^>\s?/, ""))
         .join("\n");
-      html.push(`<blockquote>${inline(quoted)}</blockquote>`);
+      html.push(`<blockquote>${inline(quoted).replaceAll(/\n/g, "<br />")}</blockquote>`);
       continue;
     }
     const listLines = block.split("\n");

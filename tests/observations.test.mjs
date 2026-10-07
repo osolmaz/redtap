@@ -65,7 +65,9 @@ test('parseTimestamp normalizes Reddit formats into ISO strings', () => {
 
 test('extractSelftext reads the text-body slot and normalizes whitespace', () => {
   const withBody = { querySelector: (sel) => (sel === '[slot="text-body"]' ? { textContent: '  line one\n\nline two  ' } : null) };
-  assert.equal(extractSelftext(withBody), 'line one line two');
+  assert.equal(extractSelftext(withBody), 'line one\n\nline two');
+  const messy = { querySelector: (sel) => (sel === '[slot="text-body"]' ? { textContent: 'a   b\n\n\n\nc' } : null) };
+  assert.equal(extractSelftext(messy), 'a b\n\nc');
   assert.equal(extractSelftext({ querySelector: () => null }), null);
   assert.equal(extractSelftext({ querySelector: () => ({ textContent: '   ' }) }), null);
   assert.equal(extractSelftext(null), null);

@@ -240,7 +240,7 @@ const STYLE = `    * { box-sizing: border-box; }
     .title:hover { color: #ff4500; }
     .imglink { display: block; margin: 8px 0 4px; }
     .thumb { display: block; max-width: min(100%, 560px); max-height: 460px; border-radius: 6px; border: 1px solid #343536; }
-    .md { white-space: pre-wrap; color: #c3cfd8; font-size: 13px; margin-top: 6px; overflow-wrap: anywhere; }
+    .md { color: #c3cfd8; font-size: 13px; margin-top: 6px; overflow-wrap: anywhere; }
     details.more { margin-top: 2px; }
     details.more summary { cursor: pointer; color: #4f8cc7; font-size: 12px; padding: 4px 0; }
     details.more .md { margin-top: 4px; }
