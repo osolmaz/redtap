@@ -5,6 +5,7 @@
 
 import type { PostSummary, StoredRecord } from "./record-store.js";
 import { renderMarkdown } from "./md.ts";
+import { engagementChart } from "./chart.ts";
 
 type SortKey = "hot" | "new" | "top" | "rising";
 
@@ -150,7 +151,7 @@ function card(p: PostSummary, now: number, sort: SortKey): string {
       <div class="arrow">▲</div>
       <div class="score">${p.score_last ?? "–"}</div>
       <div class="diff ${deltaClass(p.score_delta)}">${scoreDelta || "&nbsp;"}</div>
-      <div class="sightings" title="times seen">${p.observations}👁</div>
+      <a class="sightings" title="times seen — click for the engagement graph" href="${postPath(p)}">${p.observations}👁</a>
     </div>
     <div class="content">
       <div class="meta">
@@ -257,6 +258,18 @@ const STYLE = `    * { box-sizing: border-box; }
     .foot .open { color: #ff4500; text-decoration: none; font-weight: 700; }
     .foot .open:hover { text-decoration: underline; }
     .empty { color: #818384; text-align: center; padding: 40px 0; }
+    .chart { display: block; width: 100%; height: auto; margin-top: 10px; }
+    .chart .axis { stroke: #343536; stroke-width: 1; }
+    .chart .tick { fill: #818384; font-size: 10px; font-family: inherit; }
+    .chart .scoreline { fill: none; stroke: #ff4500; stroke-width: 2; }
+    .chart .commentline { fill: none; stroke: #4f8cc7; stroke-width: 1.5; stroke-dasharray: 4 3; }
+    .chart circle { fill: #ff4500; }
+    .chart .commentline + circle, .chart polyline.commentline ~ circle { fill: #4f8cc7; }
+    .chart .lastval { fill: #ff4500; font-size: 11px; font-weight: 700; }
+    .legend { display: flex; gap: 12px; margin-top: 2px; font-size: 11px; color: #818384; }
+    .legend .key::before { content: "— "; }
+    .legend .scorekey::before { color: #ff4500; }
+    .legend .commentkey::before { color: #4f8cc7; }
     .daynav { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 4px 0 12px; font-size: 13px; }
     .daynav a { color: #4f8cc7; text-decoration: none; }
     .daynav a:hover { color: #ff4500; }
@@ -462,6 +475,7 @@ export function renderPostPage(
   const posted = p.post_at !== null ? new Date(p.post_at).toUTCString() : "unknown";
   const image = imageHtml(p);
   const stat = (label: string, value: string): string => `<span>${label} <b>${escapeHtml(value)}</b></span>`;
+  const chartHtml = sightings.length > 1 ? engagementChart(sightings) : "";
   const history = sightings.length > 1
     ? `<div class="stats">` + [
         stat("first seen", firstSeen),
@@ -495,7 +509,7 @@ ${STYLE}  </style>
         <div class="arrow">▲</div>
         <div class="score">${p.score_last ?? "–"}</div>
         <div class="diff ${deltaClass(p.score_delta)}">${scoreDelta || "&nbsp;"}</div>
-        <div class="sightings" title="times seen">${p.observations}👁</div>
+        <a class="sightings" title="times seen — click for the engagement graph" href="${postPath(p)}">${p.observations}👁</a>
       </div>
       <div class="content">
         <div class="meta">
@@ -508,6 +522,7 @@ ${STYLE}  </style>
         <h1 class="title">${escapeHtml(p.title ?? p.post_id)}</h1>
         ${image}
         ${bodyHtml(p)}
+        ${chartHtml}
         ${history}
         <a class="gobtn" href="${escapeHtml(redditUrl)}" target="_blank" rel="noreferrer">open on reddit ↗</a>
         <span class="foot"><span class="comments">💬 ${p.comments_last ?? "–"}${commentsDelta ? ` <span class="diff ${deltaClass(p.comments_delta)}">(${commentsDelta})</span>` : ""}</span></span>
