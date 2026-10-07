@@ -136,7 +136,7 @@ function whenTitle(p: PostSummary): string {
 /** Local standalone page for a post, reddit-path style. */
 export function postPath(p: { post_id: string; subreddit?: string | null }): string {
   const sub = p.subreddit ? "/r/" + p.subreddit.replace(/^r\//i, "") : "";
-  return `${sub}/comments/${p.post_id}/`;
+  return `${sub}/comments/${p.post_id.replace(/^t3_/, "")}/`;
 }
 
 function card(p: PostSummary, now: number, sort: SortKey): string {
