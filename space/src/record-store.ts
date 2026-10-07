@@ -109,39 +109,45 @@ export class RecordStore {
       list.push(record);
       byPost.set(record.post_id, list);
     }
-    const summaries: PostSummary[] = [];
-    for (const [post_id, sightings] of byPost) {
-      sightings.sort((a, b) => a.captured_at - b.captured_at);
-      const first = sightings[0];
-      const last = sightings[sightings.length - 1];
-      const scoreFirst = first.metrics?.score ?? null;
-      const scoreLast = last.metrics?.score ?? null;
-      const commentsFirst = first.metrics?.comments ?? null;
-      const commentsLast = last.metrics?.comments ?? null;
-      summaries.push({
-        post_id,
-        subreddit: last.subreddit ?? first.subreddit ?? null,
-        title: last.title ?? first.title ?? null,
-        author: last.author ?? first.author ?? null,
-        permalink: last.permalink ?? first.permalink ?? "",
-        content_href: last.content_href ?? first.content_href ?? null,
-        thumb_href: last.thumb_href ?? first.thumb_href ?? null,
-        post_type: last.post_type ?? first.post_type ?? null,
-        post_at: postDateMs(sightings),
-        first_seen: first.captured_at > 0 ? first.captured_at : last.captured_at,
-        last_seen: last.captured_at,
-        observations: sightings.length,
-        score_first: scoreFirst,
-        score_last: scoreLast,
-        score_delta:
-          scoreFirst !== null && scoreLast !== null ? scoreLast - scoreFirst : null,
-        comments_last: commentsLast,
-        comments_delta:
-          commentsFirst !== null && commentsLast !== null ? commentsLast - commentsFirst : null,
-        selftext:
-          [...sightings].reverse().map((r) => r.selftext).find((t) => typeof t === "string" && t.length > 0) ?? null,
-      });
-    }
-    return summaries;
+    return [...byPost.entries()].map(([post_id, sightings]) => ({ post_id, ...summarize(sightings) }));
   }
+
+  postById(postId: string): { summary: PostSummary; sightings: StoredRecord[] } | null {
+    const sightings: StoredRecord[] = [];
+    for (const record of this.records.values()) {
+      if (record.post_id === postId) sightings.push(record);
+    }
+    if (sightings.length === 0) return null;
+    sightings.sort((a, b) => a.captured_at - b.captured_at);
+    return { summary: { post_id: postId, ...summarize(sightings) }, sightings };
+  }
+}
+
+export function summarize(sightings: StoredRecord[]): Omit<PostSummary, "post_id"> {
+  const first = sightings[0];
+  const last = sightings[sightings.length - 1];
+  const scoreFirst = first.metrics?.score ?? null;
+  const scoreLast = last.metrics?.score ?? null;
+  const commentsFirst = first.metrics?.comments ?? null;
+  const commentsLast = last.metrics?.comments ?? null;
+  return {
+    subreddit: last.subreddit ?? first.subreddit ?? null,
+    title: last.title ?? first.title ?? null,
+    author: last.author ?? first.author ?? null,
+    permalink: last.permalink ?? first.permalink ?? "",
+    content_href: last.content_href ?? first.content_href ?? null,
+    thumb_href: last.thumb_href ?? first.thumb_href ?? null,
+    post_type: last.post_type ?? first.post_type ?? null,
+    post_at: postDateMs(sightings),
+    first_seen: first.captured_at > 0 ? first.captured_at : last.captured_at,
+    last_seen: last.captured_at,
+    observations: sightings.length,
+    score_first: scoreFirst,
+    score_last: scoreLast,
+    score_delta: scoreFirst !== null && scoreLast !== null ? scoreLast - scoreFirst : null,
+    comments_last: commentsLast,
+    comments_delta: commentsFirst !== null && commentsLast !== null ? commentsLast - commentsFirst : null,
+    selftext:
+      [...sightings].reverse().map((r) => r.selftext).find((t) => typeof t === "string" && t.length > 0) ?? null,
+  };
 }

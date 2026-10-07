@@ -33,7 +33,7 @@ export function renderRss(posts: PostSummary[], origin: string): string {
     .slice(0, RSS_LIMIT);
   const items = newest
     .map((p) => {
-      const link = "https://www.reddit.com" + p.permalink;
+      const link = `${origin}/r/${(p.subreddit ?? "").replace(/^r\//i, "")}/comments/${p.post_id}/`;
       const title = xmlEscape(p.title ?? p.permalink);
       const body = p.selftext ? stripHtml(p.selftext).slice(0, RSS_BODY_CHARS) : "";
       const meta = [p.author ? "by u/" + p.author : "", p.score_last !== null ? p.score_last + " points" : "", p.comments_last !== null ? p.comments_last + " comments" : ""]

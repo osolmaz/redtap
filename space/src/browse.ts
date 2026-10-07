@@ -3,7 +3,8 @@
 // scope (hour/day/week/month/year/all or a custom date range), subreddit
 // filter pills, vote-pill cards with bodies extended by default.
 
-import type { PostSummary } from "./record-store.js";
+import type { PostSummary, StoredRecord } from "./record-store.js";
+import { renderMarkdown } from "./md.ts";
 
 type SortKey = "hot" | "new" | "top" | "rising";
 
@@ -92,10 +93,13 @@ function bodyHtml(p: PostSummary): string {
   if (!p.selftext) return "";
   const text = p.selftext;
   if (text.length <= BODY_LIMIT) {
-    return `<div class="md">${escapeHtml(text)}</div>`;
+    return `<div class="md">${renderMarkdown(text)}</div>`;
   }
-  return `<div class="md">${escapeHtml(text.slice(0, BODY_LIMIT))}</div>
-<details class="more"><summary>show remaining ${(text.length - BODY_LIMIT).toLocaleString("en-US")} characters</summary><div class="md">${escapeHtml(text.slice(BODY_LIMIT))}</div></details>`;
+  // Split at a block boundary near the limit so the details fold starts clean.
+  let cut = text.lastIndexOf("\n\n", BODY_LIMIT);
+  if (cut < BODY_LIMIT / 2) cut = BODY_LIMIT;
+  return `<div class="md">${renderMarkdown(text.slice(0, cut))}</div>
+<details class="more"><summary>show remaining ${(text.length - cut).toLocaleString("en-US")} characters</summary><div class="md">${renderMarkdown(text.slice(cut))}</div></details>`;
 }
 
 const MEDIA_HINT = /video|gallery|image|rich/i;
@@ -111,8 +115,7 @@ function imageHtml(p: PostSummary): string {
         ? p.thumb_href
         : null;
   if (!src) return "";
-  const link = p.content_href ?? p.permalink;
-  return `<a class="imglink" href="${escapeHtml(link)}" target="_blank" rel="noreferrer"><img class="thumb" src="${escapeHtml(src)}" loading="lazy" referrerpolicy="no-referrer" alt="post image" /></a>`;
+  return `<a class="imglink" href="${escapeHtml(postPath(p))}"><img class="thumb" src="${escapeHtml(src)}" loading="lazy" referrerpolicy="no-referrer" alt="post image" /></a>`;
 }
 
 // Reddit was founded in June 2005; sighting times before that are garbage.
@@ -130,11 +133,18 @@ function whenTitle(p: PostSummary): string {
   return "first seen " + new Date(p.first_seen).toISOString().slice(0, 16).replace("T", " ") + " UTC";
 }
 
+/** Local standalone page for a post, reddit-path style. */
+export function postPath(p: { post_id: string; subreddit?: string | null }): string {
+  const sub = p.subreddit ? "/r/" + p.subreddit.replace(/^r\//i, "") : "";
+  return `${sub}/comments/${p.post_id}/`;
+}
+
 function card(p: PostSummary, now: number, sort: SortKey): string {
   const body = bodyHtml(p);
   const image = imageHtml(p);
   const scoreDelta = delta(p.score_delta);
   const commentsDelta = delta(p.comments_delta);
+  const local = postPath(p);
   return `<article class="post">
     <div class="vote">
       <div class="arrow">▲</div>
@@ -150,7 +160,7 @@ function card(p: PostSummary, now: number, sort: SortKey): string {
         <span class="sep">·</span>
         <span class="when" title="${whenTitle(p)}">${whenLabel(p, now)}</span>
       </div>
-      <a class="title" href="https://www.reddit.com${escapeHtml(p.permalink)}">${escapeHtml(p.title ?? p.post_id)}</a>
+      <a class="title" href="${local}">${escapeHtml(p.title ?? p.post_id)}</a>
       ${image}
       ${body}
       <div class="foot">
@@ -187,6 +197,95 @@ function scopeUrl(): string {
   if (pageState.sort && pageState.sort !== "hot") parts.push(pageState.sort);
   return "/" + (parts.join("/") ? parts.join("/") + "/" : "");
 }
+
+const STYLE = `    * { box-sizing: border-box; }
+    body { font: 14px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #0b1416; color: #d7dcdc; margin: 0; }
+    header { background: #1a1a1b; border-bottom: 1px solid #343536; padding: 10px 20px; position: sticky; top: 0; z-index: 2; }
+    .headrow { display: flex; align-items: center; flex-wrap: wrap; gap: 6px 14px; max-width: 760px; margin: 0 auto; }
+    .logo { font-weight: 700; font-size: 17px; color: #ff4500; letter-spacing: -0.5px; white-space: nowrap; }
+    .logo span { color: #d7dcdc; }
+    .count { color: #818384; font-size: 12px; }
+    .tabs { display: flex; gap: 4px; margin-left: auto; }
+    .tabs a { color: #818384; text-decoration: none; font-size: 13px; font-weight: 700; padding: 6px 12px; border-radius: 999px; }
+    .tabs a.on { background: #272729; color: #ff4500; }
+    .tabs a:hover { color: #d7dcdc; }
+    .wrap { max-width: 760px; margin: 16px auto; padding: 0 12px; }
+    .scopebar { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; row-gap: 8px; margin-bottom: 10px; }
+    .custom { flex-basis: 100%; }
+    .scopelabel { color: #818384; font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; margin-right: 4px; }
+    .pill { color: #818384; text-decoration: none; font-size: 12px; border: 1px solid #343536; background: #1a1a1b; padding: 4px 10px; border-radius: 999px; }
+    .pill.on { color: #ff4500; border-color: #ff4500; }
+    .pill:hover { color: #d7dcdc; }
+    .custom { display: inline-flex; gap: 6px; align-items: center; }
+    .custom input[type="date"] { background: #1a1a1b; color: #d7dcdc; border: 1px solid #343536; border-radius: 6px; font-size: 12px; padding: 3px 6px; color-scheme: dark; }
+    .custom button { background: #272729; color: #d7dcdc; border: 1px solid #343536; border-radius: 6px; font-size: 12px; padding: 4px 10px; cursor: pointer; }
+    .custom button:hover { color: #ff4500; }
+    .pills { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 12px; }
+    .post { display: flex; gap: 10px; background: #1a1a1b; border: 1px solid #343536; border-radius: 6px; margin-bottom: 12px; padding: 10px 12px; }
+    .post:hover { border-color: #565758; }
+    .vote { width: 44px; flex: none; text-align: center; font-size: 12px; color: #d7dcdc; padding-top: 6px; }
+    .vote .arrow { color: #ff4500; font-size: 13px; line-height: 1; margin-bottom: 3px; }
+    .vote .score { font-weight: 700; font-size: 13px; line-height: 1.3; }
+    .vote .diff { font-size: 11px; line-height: 1.5; }
+    .vote .diff.up { color: #4ade80; }
+    .vote .diff.down { color: #f87171; }
+    .vote .diff.flat { color: #343536; }
+    .vote .sightings { color: #818384; font-size: 10px; margin-top: 4px; }
+    .content { flex: 1; min-width: 0; }
+    .meta { color: #818384; font-size: 12px; margin-bottom: 6px; }
+    .meta .sub { color: #d7dcdc; text-decoration: none; font-weight: 700; }
+    .meta .sub:hover { color: #ff4500; }
+    .meta .sep { margin: 0 4px; }
+    .title { display: inline-block; color: #d7dcdc; text-decoration: none; font-size: 17px; font-weight: 500; line-height: 1.35; margin: 2px 0 6px; overflow-wrap: anywhere; }
+    .title:hover { color: #ff4500; }
+    .imglink { display: block; margin: 8px 0 4px; }
+    .thumb { display: block; max-width: min(100%, 560px); max-height: 460px; border-radius: 6px; border: 1px solid #343536; }
+    .md { white-space: pre-wrap; color: #c3cfd8; font-size: 13px; margin-top: 6px; overflow-wrap: anywhere; }
+    details.more { margin-top: 2px; }
+    details.more summary { cursor: pointer; color: #4f8cc7; font-size: 12px; padding: 4px 0; }
+    details.more .md { margin-top: 4px; }
+    .foot { display: flex; gap: 16px; align-items: center; flex-wrap: wrap; margin-top: 10px; font-size: 12px; color: #818384; }
+    @media (max-width: 480px) {
+      .wrap { padding: 0 8px; }
+      .post { padding: 8px 10px; gap: 8px; }
+      .vote { width: 38px; }
+      .title { font-size: 16px; }
+      .thumb { max-width: 100%; max-height: 380px; }
+      .tabs a { padding: 5px 10px; }
+      .custom input[type="date"] { flex: 1; min-width: 0; }
+    }
+    .foot .open { color: #ff4500; text-decoration: none; font-weight: 700; }
+    .foot .open:hover { text-decoration: underline; }
+    .empty { color: #818384; text-align: center; padding: 40px 0; }
+    .daynav { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 4px 0 12px; font-size: 13px; }
+    .daynav a { color: #4f8cc7; text-decoration: none; }
+    .daynav a:hover { color: #ff4500; }
+    .daynav .daytitle { color: #d7dcdc; font-weight: 700; }
+    .daynav .ghost { color: #343536; }
+
+    .md h1, .md h2, .md h3, .md h4 { color: #d7dcdc; margin: 14px 0 6px; line-height: 1.3; }
+    .md h1 { font-size: 19px; }
+    .md h2 { font-size: 17px; }
+    .md h3, .md h4 { font-size: 15px; }
+    .md p { margin: 0 0 8px; }
+    .md a { color: #4f8cc7; text-decoration: none; overflow-wrap: anywhere; }
+    .md a:hover { color: #ff4500; }
+    .md pre { background: #0b1416; border: 1px solid #343536; border-radius: 6px; padding: 10px 12px; overflow-x: auto; margin: 8px 0; }
+    .md pre code { font: 12px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace; color: #c3cfd8; }
+    .md code { font: 12px ui-monospace, SFMono-Regular, Menlo, monospace; background: #0b1416; border: 1px solid #343536; border-radius: 4px; padding: 1px 5px; }
+    .md pre code { border: none; padding: 0; background: none; }
+    .md blockquote { border-left: 3px solid #343536; margin: 8px 0; padding: 2px 0 2px 12px; color: #818384; }
+    .md ul, .md ol { margin: 8px 0; padding-left: 22px; }
+    .md li { margin: 3px 0; }
+    .md hr { border: none; border-top: 1px solid #343536; margin: 12px 0; }
+    .postpage .title { font-size: 20px; }
+    .stats { display: flex; flex-wrap: wrap; gap: 14px; margin-top: 10px; padding-top: 10px; border-top: 1px solid #343536; font-size: 12px; color: #818384; }
+    .stats b { color: #d7dcdc; }
+    .backlink { display: inline-block; margin: 2px 0 10px; color: #4f8cc7; text-decoration: none; font-size: 13px; }
+    .backlink:hover { color: #ff4500; }
+    .gobtn { display: inline-block; background: #ff4500; color: #fff; text-decoration: none; font-weight: 700; font-size: 13px; padding: 8px 14px; border-radius: 999px; margin-top: 12px; }
+    .gobtn:hover { background: #ff6a33; }
+`;
 
 export function renderBrowsePage(
   posts: PostSummary[],
@@ -299,71 +398,7 @@ export function renderBrowsePage(
   <link rel="icon" type="image/png" href="/static/icon48.png" />
   <link rel="alternate" type="application/rss+xml" title="redtap pool" href="/rss.xml" />
   <style>
-    * { box-sizing: border-box; }
-    body { font: 14px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #0b1416; color: #d7dcdc; margin: 0; }
-    header { background: #1a1a1b; border-bottom: 1px solid #343536; padding: 10px 20px; position: sticky; top: 0; z-index: 2; }
-    .headrow { display: flex; align-items: center; flex-wrap: wrap; gap: 6px 14px; max-width: 760px; margin: 0 auto; }
-    .logo { font-weight: 700; font-size: 17px; color: #ff4500; letter-spacing: -0.5px; white-space: nowrap; }
-    .logo span { color: #d7dcdc; }
-    .count { color: #818384; font-size: 12px; }
-    .tabs { display: flex; gap: 4px; margin-left: auto; }
-    .tabs a { color: #818384; text-decoration: none; font-size: 13px; font-weight: 700; padding: 6px 12px; border-radius: 999px; }
-    .tabs a.on { background: #272729; color: #ff4500; }
-    .tabs a:hover { color: #d7dcdc; }
-    .wrap { max-width: 760px; margin: 16px auto; padding: 0 12px; }
-    .scopebar { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; row-gap: 8px; margin-bottom: 10px; }
-    .custom { flex-basis: 100%; }
-    .scopelabel { color: #818384; font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; margin-right: 4px; }
-    .pill { color: #818384; text-decoration: none; font-size: 12px; border: 1px solid #343536; background: #1a1a1b; padding: 4px 10px; border-radius: 999px; }
-    .pill.on { color: #ff4500; border-color: #ff4500; }
-    .pill:hover { color: #d7dcdc; }
-    .custom { display: inline-flex; gap: 6px; align-items: center; }
-    .custom input[type="date"] { background: #1a1a1b; color: #d7dcdc; border: 1px solid #343536; border-radius: 6px; font-size: 12px; padding: 3px 6px; color-scheme: dark; }
-    .custom button { background: #272729; color: #d7dcdc; border: 1px solid #343536; border-radius: 6px; font-size: 12px; padding: 4px 10px; cursor: pointer; }
-    .custom button:hover { color: #ff4500; }
-    .pills { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 12px; }
-    .post { display: flex; gap: 10px; background: #1a1a1b; border: 1px solid #343536; border-radius: 6px; margin-bottom: 12px; padding: 10px 12px; }
-    .post:hover { border-color: #565758; }
-    .vote { width: 44px; flex: none; text-align: center; font-size: 12px; color: #d7dcdc; padding-top: 6px; }
-    .vote .arrow { color: #ff4500; font-size: 13px; line-height: 1; margin-bottom: 3px; }
-    .vote .score { font-weight: 700; font-size: 13px; line-height: 1.3; }
-    .vote .diff { font-size: 11px; line-height: 1.5; }
-    .vote .diff.up { color: #4ade80; }
-    .vote .diff.down { color: #f87171; }
-    .vote .diff.flat { color: #343536; }
-    .vote .sightings { color: #818384; font-size: 10px; margin-top: 4px; }
-    .content { flex: 1; min-width: 0; }
-    .meta { color: #818384; font-size: 12px; margin-bottom: 6px; }
-    .meta .sub { color: #d7dcdc; text-decoration: none; font-weight: 700; }
-    .meta .sub:hover { color: #ff4500; }
-    .meta .sep { margin: 0 4px; }
-    .title { display: inline-block; color: #d7dcdc; text-decoration: none; font-size: 17px; font-weight: 500; line-height: 1.35; margin: 2px 0 6px; overflow-wrap: anywhere; }
-    .title:hover { color: #ff4500; }
-    .imglink { display: block; margin: 8px 0 4px; }
-    .thumb { display: block; max-width: min(100%, 560px); max-height: 460px; border-radius: 6px; border: 1px solid #343536; }
-    .md { white-space: pre-wrap; color: #c3cfd8; font-size: 13px; margin-top: 6px; overflow-wrap: anywhere; }
-    details.more { margin-top: 2px; }
-    details.more summary { cursor: pointer; color: #4f8cc7; font-size: 12px; padding: 4px 0; }
-    details.more .md { margin-top: 4px; }
-    .foot { display: flex; gap: 16px; align-items: center; flex-wrap: wrap; margin-top: 10px; font-size: 12px; color: #818384; }
-    @media (max-width: 480px) {
-      .wrap { padding: 0 8px; }
-      .post { padding: 8px 10px; gap: 8px; }
-      .vote { width: 38px; }
-      .title { font-size: 16px; }
-      .thumb { max-width: 100%; max-height: 380px; }
-      .tabs a { padding: 5px 10px; }
-      .custom input[type="date"] { flex: 1; min-width: 0; }
-    }
-    .foot .open { color: #ff4500; text-decoration: none; font-weight: 700; }
-    .foot .open:hover { text-decoration: underline; }
-    .empty { color: #818384; text-align: center; padding: 40px 0; }
-    .daynav { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 4px 0 12px; font-size: 13px; }
-    .daynav a { color: #4f8cc7; text-decoration: none; }
-    .daynav a:hover { color: #ff4500; }
-    .daynav .daytitle { color: #d7dcdc; font-weight: 700; }
-    .daynav .ghost { color: #343536; }
-  </style>
+${STYLE}  </style>  </style>
 </head>
 <body>
   <header>
@@ -411,4 +446,74 @@ function filterPosts(posts: PostSummary[], now: number): PostSummary[] {
     if (toMs !== undefined && at > toMs) return false;
     return true;
   });
+}
+
+export function renderPostPage(
+  summary: PostSummary,
+  sightings: StoredRecord[],
+  now: number,
+): string {
+  const p = summary;
+  const scoreDelta = delta(p.score_delta);
+  const commentsDelta = delta(p.comments_delta);
+  const redditUrl = "https://www.reddit.com" + p.permalink;
+  const firstSeen = new Date(p.first_seen).toISOString().slice(0, 16).replace("T", " ") + " UTC";
+  const lastSeen = new Date(p.last_seen).toISOString().slice(0, 16).replace("T", " ") + " UTC";
+  const posted = p.post_at !== null ? new Date(p.post_at).toUTCString() : "unknown";
+  const image = imageHtml(p);
+  const stat = (label: string, value: string): string => `<span>${label} <b>${escapeHtml(value)}</b></span>`;
+  const history = sightings.length > 1
+    ? `<div class="stats">` + [
+        stat("first seen", firstSeen),
+        stat("last seen", lastSeen),
+        stat("score then", String(p.score_first ?? "?")),
+        stat("score now", String(p.score_last ?? "?")),
+        stat("gained", (scoreDelta && scoreDelta !== "0" ? scoreDelta : "0")),
+        stat("sightings", String(p.observations)),
+      ].join("") + `</div>`
+    : `<div class="stats">` + [stat("posted", posted), stat("seen", p.observations + (p.observations === 1 ? " time" : " times"))].join("") + `</div>`;
+  return `<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>${escapeHtml(p.title ?? p.post_id)} — redtap pool</title>
+  <link rel="icon" type="image/png" href="/static/icon48.png" />
+  <style>
+${STYLE}  </style>
+</head>
+<body>
+  <header>
+    <div class="headrow">
+      <div class="logo">redtap <span>pool</span></div>
+      <a class="backlink" href="${pageUrl({ subreddit: p.subreddit })}">← ${escapeHtml(p.subreddit ?? "pool")}</a>
+    </div>
+  </header>
+  <div class="wrap">
+    <article class="post postpage">
+      <div class="vote">
+        <div class="arrow">▲</div>
+        <div class="score">${p.score_last ?? "–"}</div>
+        <div class="diff ${deltaClass(p.score_delta)}">${scoreDelta || "&nbsp;"}</div>
+        <div class="sightings" title="times seen">${p.observations}👁</div>
+      </div>
+      <div class="content">
+        <div class="meta">
+          <a class="sub" href="${pageUrl({ subreddit: p.subreddit })}">${escapeHtml(p.subreddit ?? "r/unknown")}</a>
+          <span class="sep">·</span>
+          <span class="author">u/${escapeHtml(p.author ?? "unknown")}</span>
+          <span class="sep">·</span>
+          <span class="when" title="${whenTitle(p)}">${whenLabel(p, now)}</span>
+        </div>
+        <h1 class="title">${escapeHtml(p.title ?? p.post_id)}</h1>
+        ${image}
+        ${bodyHtml(p)}
+        ${history}
+        <a class="gobtn" href="${escapeHtml(redditUrl)}" target="_blank" rel="noreferrer">open on reddit ↗</a>
+        <span class="foot"><span class="comments">💬 ${p.comments_last ?? "–"}${commentsDelta ? ` <span class="diff ${deltaClass(p.comments_delta)}">(${commentsDelta})</span>` : ""}</span></span>
+      </div>
+    </article>
+  </div>
+</body>
+</html>`;
 }

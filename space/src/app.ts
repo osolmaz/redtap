@@ -9,7 +9,7 @@ import { serveStatic } from "@hono/node-server/serve-static";
 import { readFileSync } from "node:fs";
 import { z } from "zod";
 
-import { renderBrowsePage } from "./browse.ts";
+import { renderBrowsePage, renderPostPage } from "./browse.ts";
 import { renderRss } from "./rss.ts";
 import { openBucketLog, type BucketLog } from "./bucket-log.ts";
 import { RecordStore } from "./record-store.ts";
@@ -136,6 +136,19 @@ export function createApp(config: Config, log: BucketLog, store?: RecordStore) {
     }
     return c.json(controlCache.doc ?? {});
   });
+
+  // Standalone post pages, reddit-path style: /r/{sub}/comments/{id}/.
+  const renderPost = async (c: { req: { param: (k: string) => string } }, rawId: string) => {
+    await recordStore.ensureLoaded(config.hubToken);
+    const bare = rawId.replace(/^t3_/, "");
+    const found = recordStore.postById("t3_" + bare);
+    if (found === null) return c.text("post not in pool", 404);
+    return c.html(renderPostPage(found.summary, found.sightings, Date.now()));
+  };
+  app.get("/r/:sub/comments/:id", (c) => renderPost(c, c.req.param("id")));
+  app.get("/r/:sub/comments/:id/", (c) => renderPost(c, c.req.param("id")));
+  app.get("/comments/:id", (c) => renderPost(c, c.req.param("id")));
+  app.get("/comments/:id/", (c) => renderPost(c, c.req.param("id")));
 
   // Reddit-style browse paths: /r/{sub}/{sort}/{range}/ with word ranges
   // (hour..all) or a custom date pair in the path: /r/{sub}/hot/2026-10-01/2026-10-03/.
