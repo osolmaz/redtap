@@ -9,7 +9,7 @@
 // badge) and keeps buffering for up to 30 days.
 
 import { uploadFile } from './vendor/index.mjs';
-import { hashesOf, toV2Lines } from './v2log.js';
+import { bodyHash, EMPTY_BODY_HASH, hashesOf, toV2Lines } from './v2log.js';
 
 const OUTBOX_KEY = 'poolOutbox';
 const HASHES_KEY = 'poolBodyHashes';
@@ -124,13 +124,31 @@ export async function sealNow(force = false) {
     outbox = outbox.filter((r) => (r._admittedAt ?? Date.now()) >= cutoff);
 
     const records = outbox.map(({ _admittedAt, ...record }) => record);
-    const lines = await toV2Lines(records, knownHashes, digest);
+    let lines = await toV2Lines(records, knownHashes, digest);
     if (lines.length === 0) { outbox = []; await storage().set({ [OUTBOX_KEY]: outbox }); return 0; }
-    // A record's line count varies with body lines; seal at most MAX_LINES_PER_COMMIT
-    // records' worth (the outbox keeps the rest for the next cycle).
+    // A record contributes one sight line plus a body line when its selftext is
+    // new to the committed hashes. Seal the longest prefix that fits the commit
+    // line cap; the outbox keeps the rest for the next cycle so the queue always
+    // drains.
+    let sealed = records;
     if (lines.length > MAX_LINES_PER_COMMIT) {
-      return 0; // oversized mid-seal: keep everything for the next cycle window
+      sealed = [];
+      let count = 0;
+      const seen = new Set();
+      for (const record of records) {
+        if (!record?.post_id || !record?.observation_id) continue;
+        const h = await bodyHash(record, digest);
+        const bodyLines = h !== EMPTY_BODY_HASH && !knownHashes.has(h) && !seen.has(h) ? 1 : 0;
+        if (count + bodyLines + 1 > MAX_LINES_PER_COMMIT) break;
+        seen.add(h);
+        count += 1 + bodyLines;
+        sealed.push(record);
+      }
+      lines = await toV2Lines(sealed, knownHashes, digest);
     }
+    const sealedIds = new Set(sealed.map((r) => r.observation_id));
+    const sealedCount = sealed.length;
+    if (sealedCount === 0) return 0;
 
     if (!cycle) {
       const now = new Date();
@@ -150,17 +168,17 @@ export async function sealNow(force = false) {
       repo: { type: 'bucket', name: config.bucketRepo },
       accessToken: config.hubToken,
       file: { path: finalPath, content },
-      commitTitle: 'redtap: seal ' + lines.length + ' v2 lines (' + outbox.length + ' records)',
+      commitTitle: 'redtap: seal ' + lines.length + ' v2 lines (' + sealedCount + ' records)',
     });
 
-    // success: commit the body hashes, drop the outbox, clear the cycle
+    // success: commit the body hashes, drop the sealed records, clear the cycle
     for (const h of hashesOf(lines)) knownHashes.add(h);
     if (knownHashes.size > 200_000) knownHashes = new Set([...knownHashes].slice(-150_000));
-    outbox = [];
+    outbox = outbox.filter((r) => !sealedIds.has(r.observation_id));
     cycle = null;
     backoffMs = 0;
-    stats.synced += records.length;
-    stats.queued = 0;
+    stats.synced += sealedCount;
+    stats.queued = outbox.length;
     stats.lastSyncAt = Date.now();
     stats.lastError = null;
     await storage().set({ [OUTBOX_KEY]: outbox, [HASHES_KEY]: [...knownHashes], [STATE_KEY]: stats });

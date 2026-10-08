@@ -1,4 +1,8 @@
-import { chromium } from '/home/onur/repos/solmazio/node_modules/.pnpm/playwright-core@1.61.1/node_modules/playwright-core/index.mjs';
+// Requires playwright-core resolvable from the ambient node_modules (install it
+// next to the checkout, or point NODE_PATH at an existing install).
+import { createRequire } from 'node:module';
+const require = createRequire(import.meta.url);
+const { chromium } = require('playwright-core');
 import { readFileSync } from 'node:fs';
 
 // The write probe: load the fixture extension in a real headless Chrome and

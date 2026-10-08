@@ -29,7 +29,9 @@ const digest = async (bytes) => createHash('sha256').update(bytes).digest('hex')
 
 function withBase(html) {
   if (!BASE) return html;
-  return html.replaceAll('href="/', 'href="' + BASE + '/').replaceAll('action="' + BASE + '/', 'action="/');
+  // prefix every root-relative link and form target so the same html serves
+  // at a Pages subpath
+  return html.replaceAll('href="/', 'href="' + BASE + '/').replaceAll('action="/', 'action="' + BASE + '/');
 }
 
 async function readV2Lines() {
@@ -114,13 +116,14 @@ function buildSummaries(unique) {
     };
   });
   out.sort((a, b) => a.post_id.localeCompare(b.post_id));
-  return out;
+  return { summaries: out, byPost };
 }
 
 async function main() {
   rmSync(OUT, { recursive: true, force: true });
   const fromSpace = arg('from-space', undefined);
   let summaries;
+  let byPost = null;
   if (fromSpace) {
     // stopgap/parity input: the live Space's summaries (post_at already ms)
     const res = await fetch(fromSpace.replace(/\/$/, '') + '/api/posts');
@@ -131,7 +134,7 @@ async function main() {
     const lines = await readV2Lines();
     const records = fromV2Lines(lines);
     console.error('records:', records.length);
-    summaries = buildSummaries(records);
+    ({ summaries, byPost } = buildSummaries(records));
   }
 
   // sightings per post (for the post-page charts); the Space stopgap has one
@@ -177,7 +180,8 @@ async function main() {
   }
 
   // rss + freshness banner data
-  write('feed.xml', withBase(renderRss(summaries, 'https://osolmaz.github.io' + BASE)).replace('href="/', 'href="https://osolmaz.github.io' + BASE + '/'), 'application/rss+xml');
+  // rss.xml is the path the rendered pages link (autodiscovery + header)
+  write('rss.xml', withBase(renderRss(summaries, 'https://osolmaz.github.io' + BASE)).replace('href="/', 'href="https://osolmaz.github.io' + BASE + '/'), 'application/rss+xml');
   write('status.json', JSON.stringify({ newestSightingMs: Math.max(...summaries.map((p) => p.last_seen), 0), posts: summaries.length, builtAt: now }, null, 2));
   write('index.json', JSON.stringify({ posts: summaries }, null, 1));
 
