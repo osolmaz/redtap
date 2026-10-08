@@ -5,7 +5,7 @@ import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { makeBucketMirror } from './helpers/v2-fixture.mjs';
+import { makeBucketMirror, POST_DAY } from './helpers/v2-fixture.mjs';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -51,13 +51,13 @@ test('the server renders the site over http from a local folder', async () => {
     assert.equal(sub.status, 200);
     assert.ok(sub.body.includes('Fixture post'));
 
-    const day = await get(url, '/day/2026-10-08/');
+    const day = await get(url, '/day/' + POST_DAY + '/');
     assert.equal(day.status, 200);
     assert.ok(day.body.includes('Fixture post'));
 
     const days = await get(url, '/days/');
     assert.equal(days.status, 200);
-    assert.ok(days.body.includes('2026-10-08'));
+    assert.ok(days.body.includes(POST_DAY));
 
     const post = await get(url, '/r/LocalLLaMA/comments/fix000/');
     assert.equal(post.status, 200);

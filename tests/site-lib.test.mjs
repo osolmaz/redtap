@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { join } from 'node:path';
 import { withBase, parseSegment, listLocalSegments, readV2Lines, siteState, renderRoute, allRoutes, dataDays } from '../builder/site-lib.mjs';
-import { makeBucketMirror } from './helpers/v2-fixture.mjs';
+import { makeBucketMirror, POST_AT_MS, POST_DAY } from './helpers/v2-fixture.mjs';
 
 test('withBase prefixes links and form targets, and is a no-op without a base', () => {
   const html = '<form action="/"><a href="/hot/">x</a>';
@@ -21,9 +21,10 @@ test('parseSegment reads gzip and plain segments and skips malformed lines', asy
 
 test('listLocalSegments finds segments in a mirror root and in a direct log folder', async () => {
   const root = await makeBucketMirror();
-  assert.deepEqual(listLocalSegments(root), [join(root, 'v2', 'log', '2026', '10', '08', '1759920060000-fixture.jsonl')]);
+  const segment = join(root, 'v2', 'log', ...POST_DAY.split('-'), POST_AT_MS + '-fixture.jsonl');
+  assert.deepEqual(listLocalSegments(root), [segment]);
   const logDir = join(root, 'v2', 'log');
-  assert.deepEqual(listLocalSegments(logDir), [join(logDir, '2026', '10', '08', '1759920060000-fixture.jsonl')]);
+  assert.deepEqual(listLocalSegments(logDir), [segment]);
 });
 
 test('the local backend reads the same lines that were written', async () => {
@@ -36,10 +37,11 @@ test('the local backend reads the same lines that were written', async () => {
 
 test('siteState summarizes the local backend into the record-store shape', async () => {
   const root = await makeBucketMirror();
-  const { summaries, byPost, now } = await siteState({ kind: 'local', dir: root }, { now: 1759920100000 });
+  const at = POST_AT_MS + 90_000;
+  const { summaries, byPost, now } = await siteState({ kind: 'local', dir: root }, { now: at });
   assert.equal(summaries.length, 2);
   assert.equal(byPost.size, 2);
-  assert.equal(now, 1759920100000);
+  assert.equal(now, at);
   const first = summaries.find((p) => p.post_id === 't3_fix000');
   assert.equal(first.title, 'Fixture post');
   assert.equal(first.score_first, 10);
@@ -60,17 +62,17 @@ test('renderRoute resolves every route family and rejects unknown paths', async 
   assert.equal(JSON.parse(renderRoute('/index.json', state).body).posts.length, 2);
   assert.ok(renderRoute('/', state).body.includes('Fixture post'));
   assert.ok(renderRoute('/hot/day/', state).body.includes('Fixture post'));
-  assert.ok(renderRoute('/day/2026-10-08/', state).body.includes('Fixture post'));
+  assert.ok(renderRoute('/day/' + POST_DAY + '/', state).body.includes('Fixture post'));
   // date shapes the pages themselves link: day nav (/date/ and /from/to/)
-  assert.ok(renderRoute('/2026-10-08/', state).body.includes('Fixture post'));
-  assert.ok(renderRoute('/2026-10-07/2026-10-09/', state).body.includes('Fixture post'));
-  assert.ok(renderRoute('/r/LocalLLaMA/2026-10-08/', state).body.includes('Fixture post'));
-  assert.ok(renderRoute('/hot/', state, { from: '2026-10-08', to: '2026-10-08' }).body.includes('Fixture post'));
+  assert.ok(renderRoute('/' + POST_DAY + '/', state).body.includes('Fixture post'));
+  assert.ok(renderRoute('/2020-01-01/2030-01-01/', state).body.includes('Fixture post'));
+  assert.ok(renderRoute('/r/LocalLLaMA/' + POST_DAY + '/', state).body.includes('Fixture post'));
+  assert.ok(renderRoute('/hot/', state, { from: POST_DAY, to: POST_DAY }).body.includes('Fixture post'));
   assert.ok(renderRoute('/r/LocalLLaMA/top/month/', state).body.includes('Fixture post'));
   assert.ok(renderRoute('/r/LocalLLaMA/comments/fix000/', state).body.includes('Fixture post'));
   assert.ok(renderRoute('/comments/fix001/', state).body.includes('Second fixture post'));
   // the days index links the routable /day/<date>/ pages
-  assert.ok(renderRoute('/days/', state).body.includes('href="/day/2026-10-08/"'));
+  assert.ok(renderRoute('/days/', state).body.includes('href="/day/' + POST_DAY + '/"'));
   assert.equal(renderRoute('/nope/', state), null);
   assert.equal(renderRoute('/r/Missing/comments/fix000/', state), null);
   assert.equal(renderRoute('/static/icon48.png', state), null);
@@ -79,5 +81,5 @@ test('renderRoute resolves every route family and rejects unknown paths', async 
 test('dataDays derives the UTC day list from post_at', async () => {
   const root = await makeBucketMirror();
   const { summaries } = await siteState({ kind: 'local', dir: root });
-  assert.deepEqual(dataDays(summaries), ['2026-10-08']);
+  assert.deepEqual(dataDays(summaries), [POST_DAY]);
 });
