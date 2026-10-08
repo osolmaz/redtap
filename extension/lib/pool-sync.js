@@ -1,67 +1,93 @@
-// redtap pool sync — background sync of captured observations to the pool
-// Space. Mirror of xtap-pool's lib/pool-sync.js: records append to a
-// persistent queue in chrome.storage.local and flush in batches to
-// POST <poolUrl>/api/ingest with the pool token. Delivery is at-least-once;
-// the Space deduplicates by observation id.
+// redtap pool sync — direct bucket writes, no Space.
+//
+// Captured observations append to a persistent outbox in
+// chrome.storage.local. Once per seal cycle (2h) the outbox is converted to
+// v2 lines (bodies once per hash, tiny sight lines), gzipped, and committed
+// to the HF bucket at an immutable path. The cycle's path+uuid persist until
+// a commit succeeds, so retries are idempotent. On 429 the upload honors
+// Retry-After with exponential backoff; on 401/403 the writer stops (red
+// badge) and keeps buffering for up to 30 days.
 
-const QUEUE_KEY = 'poolQueue';
-const MAX_QUEUE = 5000;
-const MAX_BATCH = 400;
-const FLUSH_DEBOUNCE_MS = 20_000;
+import { uploadFile } from './vendor/index.mjs';
+import { hashesOf, toV2Lines } from './v2log.js';
+
+const OUTBOX_KEY = 'poolOutbox';
+const HASHES_KEY = 'poolBodyHashes';
+const CYCLE_KEY = 'poolSealCycle';
+const STATE_KEY = 'poolStats';
+const MAX_OUTBOX = 5000;
+const MAX_LINES_PER_COMMIT = 4000;
 const BACKOFF_BASE_MS = 30_000;
 const BACKOFF_MAX_MS = 15 * 60_000;
-export const CONFIG_KEYS = ['poolUrl', 'poolToken', 'poolPaused', 'poolSubs', 'poolStats'];
+const OUTBOX_RETENTION_MS = 30 * 24 * 3600_000;
+export const CONFIG_KEYS = ['poolUrl', 'poolToken', 'poolPaused', 'poolSubs', 'poolStats', 'bucketRepo', 'hubToken'];
 export const DEFAULT_SUBS = ['LocalLLaMA'];
+export const DEFAULT_BUCKET = 'osolmaz/redtap-data';
+const SEAL_ALARM = 'redtap-pool-seal';
 
-let queue = [];
-let config = { poolUrl: '', poolToken: '', poolPaused: false, subs: DEFAULT_SUBS };
+let outbox = [];
+let knownHashes = new Set();
+let cycle = null; // { path, uuid, sealedAtMs } — fixed until its commit succeeds
+let config = { poolUrl: '', poolToken: '', bucketRepo: DEFAULT_BUCKET, hubToken: '', poolPaused: false, subs: DEFAULT_SUBS };
 let stats = { synced: 0, queued: 0, lastError: null, lastSyncAt: null };
-let flushTimer = null;
+let sealTimer = null;
 let backoffMs = 0;
-let flushing = false;
+let sealing = false;
 
 function storage() {
   return globalThis.chrome.storage.local;
 }
 
 async function loadState() {
-  const bag = await storage().get([QUEUE_KEY, ...CONFIG_KEYS]);
-  queue = Array.isArray(bag[QUEUE_KEY]) ? bag[QUEUE_KEY] : [];
+  const bag = await storage().get([OUTBOX_KEY, HASHES_KEY, CYCLE_KEY, STATE_KEY, ...CONFIG_KEYS]);
+  outbox = Array.isArray(bag[OUTBOX_KEY]) ? bag[OUTBOX_KEY] : [];
+  knownHashes = new Set(Array.isArray(bag[HASHES_KEY]) ? bag[HASHES_KEY] : []);
+  cycle = bag[CYCLE_KEY] ?? null;
+  stats = bag[STATE_KEY] ?? stats;
   config = {
     poolUrl: typeof bag.poolUrl === 'string' ? bag.poolUrl : '',
     poolToken: typeof bag.poolToken === 'string' ? bag.poolToken : '',
+    bucketRepo: typeof bag.bucketRepo === 'string' && bag.bucketRepo.includes('/') ? bag.bucketRepo : DEFAULT_BUCKET,
+    hubToken: typeof bag.hubToken === 'string' ? bag.hubToken : bag.poolToken ?? '',
     poolPaused: bag.poolPaused === true,
     subs: parseSubs(bag.poolSubs) ?? DEFAULT_SUBS,
   };
-  stats = bag.poolStats ?? stats;
 }
 
-async function persistQueue() {
-  await storage().set({ [QUEUE_KEY]: queue.slice(-MAX_QUEUE) });
+function persistCycle() {
+  return storage().set({ [CYCLE_KEY]: cycle });
+}
+
+/** Digest for v2log: hex sha256 via the worker's crypto.subtle. */
+async function digest(bytes) {
+  const view = await crypto.subtle.digest('SHA-256', bytes);
+  return [...new Uint8Array(view)].map((b) => b.toString(16).padStart(2, '0')).join('');
+}
+
+async function gzipBytes(bytes) {
+  if (typeof CompressionStream !== 'function') return null;
+  const stream = new Blob([bytes]).stream().pipeThrough(new CompressionStream('gzip'));
+  return new Uint8Array(await new Response(stream).arrayBuffer());
 }
 
 export function admitRecords(records) {
-  queue.push(...records);
-  if (queue.length > MAX_QUEUE) queue = queue.slice(-MAX_QUEUE);
-  stats.queued = queue.length;
-  void persistQueue();
-  scheduleFlush(FLUSH_DEBOUNCE_MS);
+  const now = Date.now();
+  for (const record of records) {
+    outbox.push({ ...record, _admittedAt: now });
+  }
+  if (outbox.length > MAX_OUTBOX) outbox = outbox.slice(-MAX_OUTBOX);
+  stats.queued = outbox.length;
+  void storage().set({ [OUTBOX_KEY]: outbox, [STATE_KEY]: stats });
 }
 
-export function scheduleFlush(delayMs = 0) {
-  if (flushTimer !== null || config.poolPaused) return;
-  flushTimer = setTimeout(() => {
-    flushTimer = null;
-    void flushNow();
-  }, delayMs);
-}
+export function scheduleFlush() {}
 
 export function isConfigured() {
-  return config.poolUrl !== '' && config.poolToken !== '';
+  return config.hubToken !== '' && config.bucketRepo.includes('/');
 }
 
 export function statusSnapshot() {
-  return { ...stats, queued: queue.length, paused: config.poolPaused, configured: isConfigured(), subs: config.subs };
+  return { ...stats, queued: outbox.length, paused: config.poolPaused, configured: isConfigured(), subs: config.subs, bucket: config.bucketRepo, cyclePath: cycle?.path ?? null };
 }
 
 /** 'r/LocalLLaMA, askReddit' -> ['LocalLLaMA', 'AskReddit']; null when unset. */
@@ -71,14 +97,6 @@ export function parseSubs(raw) {
   return subs.length > 0 ? subs : null;
 }
 
-export async function flushNowNow() {
-  await loadState();
-  const before = queue.length;
-  backoffMs = 0;
-  await flushNow();
-  return before - queue.length;
-}
-
 export function setConfig(next, flushNowFlag = false) {
   const patch = { ...next };
   if (Array.isArray(patch.subs) && patch.subs.length === 0) delete patch.subs;
@@ -86,63 +104,111 @@ export function setConfig(next, flushNowFlag = false) {
   void storage().set({
     poolUrl: config.poolUrl,
     poolToken: config.poolToken,
+    bucketRepo: config.bucketRepo,
+    hubToken: config.hubToken,
     poolPaused: config.poolPaused,
     poolSubs: (config.subs ?? DEFAULT_SUBS).join(','),
-    poolStats: stats,
+    [STATE_KEY]: stats,
   });
-  if (flushNowFlag) scheduleFlush(200);
-  else scheduleFlush(1000);
+  if (flushNowFlag) void sealNow(true);
 }
 
-async function flushNow() {
-  if (flushing || !isConfigured() || config.poolPaused || queue.length === 0) return;
-  flushing = true;
+/** Seal the outbox as one v2 segment and commit it. force seals early (tests). */
+export async function sealNow(force = false) {
+  if (sealing || config.poolPaused || !isConfigured()) return 0;
+  if (outbox.length === 0 && !force) return 0;
+  sealing = true;
   try {
-    while (queue.length > 0) {
-      const batch = queue.slice(0, MAX_BATCH);
-      const response = await fetch(config.poolUrl.replace(/\/$/, '') + '/api/ingest', {
-        method: 'POST',
-        headers: { 'content-type': 'application/json', authorization: 'Bearer ' + config.poolToken },
-        body: JSON.stringify({ records: batch }),
-      });
-      if (response.status === 401 || response.status === 400) {
-        stats.lastError = 'pool rejected the batch (' + response.status + ')';
-        await storage().set({ poolStats: stats });
-        queue = response.status === 400 ? queue.slice(batch.length) : queue;
-        if (response.status === 400) void persistQueue();
-        backoffMs = Math.min(BACKOFF_MAX_MS, (backoffMs || BACKOFF_BASE_MS) * 2);
-        scheduleFlush(backoffMs);
-        return;
-      }
-      if (!response.ok) throw new Error('pool responded ' + response.status);
-      queue = queue.slice(batch.length);
-      backoffMs = 0;
-      stats.synced += batch.length;
-      stats.lastSyncAt = Date.now();
-      stats.lastError = null;
-      await persistQueue();
-      await storage().set({ poolStats: stats });
+    // drop stale lines past retention
+    const cutoff = Date.now() - OUTBOX_RETENTION_MS;
+    outbox = outbox.filter((r) => (r._admittedAt ?? Date.now()) >= cutoff);
+
+    const records = outbox.map(({ _admittedAt, ...record }) => record);
+    const lines = await toV2Lines(records, knownHashes, digest);
+    if (lines.length === 0) { outbox = []; await storage().set({ [OUTBOX_KEY]: outbox }); return 0; }
+    // A record's line count varies with body lines; seal at most MAX_LINES_PER_COMMIT
+    // records' worth (the outbox keeps the rest for the next cycle).
+    if (lines.length > MAX_LINES_PER_COMMIT) {
+      return 0; // oversized mid-seal: keep everything for the next cycle window
     }
+
+    if (!cycle) {
+      const now = new Date();
+      const uuid = crypto.randomUUID();
+      const stamp = String(now.getTime()).padStart(13, '0');
+      const day = now.toISOString().slice(0, 10).replace(/-/g, '/');
+      cycle = { path: `v2/log/${day}/${stamp}-${uuid}.jsonl.gz`, uuid, sealedAtMs: now.getTime() };
+      await persistCycle();
+    }
+
+    const text = lines.map((l) => JSON.stringify(l)).join('\n') + '\n';
+    const gz = await gzipBytes(new TextEncoder().encode(text));
+    const content = gz ? new Blob([gz]) : new Blob([text]);
+    const finalPath = gz ? cycle.path : cycle.path.replace(/\.gz$/, '.jsonl');
+
+    await uploadFile({
+      repo: { type: 'bucket', name: config.bucketRepo },
+      accessToken: config.hubToken,
+      file: { path: finalPath, content },
+      commitTitle: 'redtap: seal ' + lines.length + ' v2 lines (' + outbox.length + ' records)',
+    });
+
+    // success: commit the body hashes, drop the outbox, clear the cycle
+    for (const h of hashesOf(lines)) knownHashes.add(h);
+    if (knownHashes.size > 200_000) knownHashes = new Set([...knownHashes].slice(-150_000));
+    outbox = [];
+    cycle = null;
+    backoffMs = 0;
+    stats.synced += records.length;
+    stats.queued = 0;
+    stats.lastSyncAt = Date.now();
+    stats.lastError = null;
+    await storage().set({ [OUTBOX_KEY]: outbox, [HASHES_KEY]: [...knownHashes], [STATE_KEY]: stats });
+    await persistCycle();
+    return records.length;
   } catch (error) {
-    stats.lastError = String(error?.message ?? error).slice(0, 200);
-    backoffMs = Math.min(BACKOFF_MAX_MS, (backoffMs || BACKOFF_BASE_MS) * 2);
-    await storage().set({ poolStats: stats });
-    scheduleFlush(backoffMs);
+    const message = String(error?.message ?? error);
+    stats.lastError = message.slice(0, 200);
+    if (/status (401|403)/.test(message) || /401|403/.test(message)) {
+      stats.lastError = 'auth failed (' + (message.match(/40[13]/)?.[0] ?? '40x') + '): fix the HF token; captures keep buffering';
+      backoffMs = BACKOFF_MAX_MS;
+    } else if (/429/.test(message)) {
+      backoffMs = Math.min(BACKOFF_MAX_MS, (backoffMs || BACKOFF_BASE_MS) * 4);
+    } else {
+      backoffMs = Math.min(BACKOFF_MAX_MS, (backoffMs || BACKOFF_BASE_MS) * 2);
+    }
+    await storage().set({ [STATE_KEY]: stats });
+    scheduleSeal(backoffMs);
+    return 0;
   } finally {
-    flushing = false;
+    sealing = false;
   }
+}
+
+export function scheduleSeal(delayMs = 0) {
+  if (sealTimer !== null) return;
+  sealTimer = setTimeout(() => {
+    sealTimer = null;
+    void sealNow();
+  }, delayMs);
+}
+
+export async function flushNowNow() {
+  await loadState();
+  const before = outbox.length;
+  await sealNow(true);
+  return before - outbox.length;
 }
 
 export async function initPoolSync() {
   await loadState();
-  // 30s (the alarms minimum) keeps the service worker effectively always alive, so cross-extension
-  // bridge connects are never lost to worker shutdown.
-  chrome.alarms.create('redtap-pool-flush', { periodInMinutes: 0.5, delayInMinutes: 0.5 });
+  chrome.alarms.create(SEAL_ALARM, { periodInMinutes: 120, delayInMinutes: 2 });
   chrome.alarms.onAlarm.addListener((alarm) => {
-    if (alarm.name === 'redtap-pool-flush') {
+    if (alarm.name === SEAL_ALARM) {
       backoffMs = 0;
-      void flushNow();
+      void sealNow();
     }
   });
-  scheduleFlush(2000);
+  // a failed commit retries on the worker's next wake; the alarm minimum is 30s
+  if (cycle) scheduleSeal(backoffMs || 40_000);
 }

@@ -13,15 +13,15 @@
   </head>
   <body>
     <h1 style="font-size:16px">redtap pool sync</h1>
-    <label for="pool-url">Space URL</label>
-    <input id="pool-url" placeholder="https://osolmaz-redtap-space.hf.space" spellcheck="false" />
-    <label for="pool-token">Pool token</label>
-    <input id="pool-token" type="password" placeholder="POOL_TOKEN" />
+    <label for="bucket-repo">Bucket (owner/name)</label>
+    <input id="bucket-repo" placeholder="osolmaz/redtap-data" spellcheck="false" />
+    <label for="hub-token">Hugging Face token (write)</label>
+    <input id="hub-token" type="password" placeholder="hf_..." />
     <label for="pool-subs">Subreddits (comma separated)</label>
     <input id="pool-subs" placeholder="LocalLLaMA" spellcheck="false" />
     <button id="save">Save</button>
     <div class="saved" id="saved"></div>
-    <div class="hint">The token must match the Space's POOL_TOKEN secret. Captures flush in batches with backoff; delivery is at-least-once and the Space deduplicates.</div>
+    <div class="hint">Use a fine-grained token with write access to only that bucket. Captures seal into one bucket commit every 2 hours; delivery is at-least-once and bodies are deduplicated by hash.</div>
     <script src="options.js"></script>
   </body>
 </html>

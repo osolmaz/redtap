@@ -1,0 +1,9 @@
+{
+  "manifest_version": 3,
+  "name": "rt-hub-probe",
+  "version": "0.0.1",
+  "background": { "service_worker": "background.js", "type": "module" },
+  "permissions": ["storage"],
+  "host_permissions": ["https://huggingface.co/*", "https://cas-bridge.xethub.hf.co/*", "https://cas-server.xethub.hf.co/*", "https://transfer.xethub.hf.co/*"],
+  "content_security_policy": { "extension_pages": "script-src 'self' 'wasm-unsafe-eval'; object-src 'self'" }
+}

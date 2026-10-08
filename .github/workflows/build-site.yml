@@ -1,0 +1,47 @@
+name: build-site
+
+# The bucket-only builder: reads the private redtap-data bucket, pre-renders
+# the site, deploys to GitHub Pages. Runs every 2 hours and on demand.
+# Requires: Pages enabled (Source: GitHub Actions) and an HF_TOKEN secret
+# with read access to osolmaz/redtap-data.
+
+on:
+  schedule:
+    - cron: '17 */2 * * *'
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    if: github.event_name == 'workflow_dispatch' || github.repository == 'osolmaz/redtap'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm install --no-audit --no-fund @huggingface/hub
+      - run: node builder/build-site.mjs --token "$HF_TOKEN" --base /redtap
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: builder/dist
+  deploy:
+    if: github.event_name == 'workflow_dispatch' || github.repository == 'osolmaz/redtap'
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

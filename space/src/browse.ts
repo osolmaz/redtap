@@ -90,17 +90,23 @@ function isDirectImageUrl(url: string): boolean {
   }
 }
 
-function bodyHtml(p: PostSummary): string {
+const CARD_BODY_LIMIT = 1_000;
+
+function bodyHtml(p: PostSummary, mode: "card" | "page" = "card"): string {
   if (!p.selftext) return "";
   const text = p.selftext;
-  if (text.length <= BODY_LIMIT) {
+  const limit = mode === "page" ? BODY_LIMIT : CARD_BODY_LIMIT;
+  if (text.length <= limit) {
     return `<div class="md">${renderMarkdown(text)}</div>`;
   }
-  // Split at a block boundary near the limit so the details fold starts clean.
-  let cut = text.lastIndexOf("\n\n", BODY_LIMIT);
-  if (cut < BODY_LIMIT / 2) cut = BODY_LIMIT;
-  return `<div class="md">${renderMarkdown(text.slice(0, cut))}</div>
-<details class="more"><summary>show remaining ${(text.length - cut).toLocaleString("en-US")} characters</summary><div class="md">${renderMarkdown(text.slice(cut))}</div></details>`;
+  // Split at a block boundary near the limit so the fold starts clean.
+  let cut = text.lastIndexOf("\n\n", limit);
+  if (cut < limit / 2) cut = limit;
+  const head = `<div class="md">${renderMarkdown(text.slice(0, cut))}</div>`;
+  if (mode === "card") {
+    return `${head}<a class="more" href="${postPath(p)}">read more (${(text.length - cut).toLocaleString("en-US")} more characters) →</a>`;
+  }
+  return `${head}<details class="more"><summary>show remaining ${(text.length - cut).toLocaleString("en-US")} characters</summary><div class="md">${renderMarkdown(text.slice(cut))}</div></details>`;
 }
 
 const MEDIA_HINT = /video|gallery|image|rich/i;
@@ -244,6 +250,8 @@ const STYLE = `    * { box-sizing: border-box; }
     .md { color: #c3cfd8; font-size: 13px; margin-top: 6px; overflow-wrap: anywhere; }
     details.more { margin-top: 2px; }
     details.more summary { cursor: pointer; color: #4f8cc7; font-size: 12px; padding: 4px 0; }
+    a.more { display: block; color: #4f8cc7; text-decoration: none; font-size: 12px; padding: 4px 0; }
+    a.more:hover { color: #ff4500; }
     details.more .md { margin-top: 4px; }
     .foot { display: flex; gap: 16px; align-items: center; flex-wrap: wrap; margin-top: 10px; font-size: 12px; color: #818384; }
     @media (max-width: 480px) {
@@ -521,7 +529,7 @@ ${STYLE}  </style>
         </div>
         <h1 class="title">${escapeHtml(p.title ?? p.post_id)}</h1>
         ${image}
-        ${bodyHtml(p)}
+        ${bodyHtml(p, "page")}
         ${chartHtml}
         ${history}
         <a class="gobtn" href="${escapeHtml(redditUrl)}" target="_blank" rel="noreferrer">open on reddit ↗</a>
