@@ -15,7 +15,7 @@ import { extname, join, normalize } from 'node:path';
 import { homedir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 import { dirname } from 'node:path';
-import { DEFAULT_BUCKET, renderRoute, siteState } from './site-lib.mjs';
+import { DEFAULT_BUCKET, renderRoute, siteState, withBase } from './site-lib.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const arg = (name, fallback) => {
@@ -71,7 +71,7 @@ function serveStatic(pathname) {
 }
 
 function notFound() {
-  return { type: 'text/html', body: '<!doctype html><html><head><meta charset="utf-8"><title>not found — redtap</title></head><body><p>Nothing at this address. <a href="/">Back to the front page.</a></p></body></html>' };
+  return { type: 'text/html', body: withBase('<!doctype html><html><head><meta charset="utf-8"><title>not found — redtap</title></head><body><p>Nothing at this address. <a href="/">Back to the front page.</a></p></body></html>', BASE) };
 }
 
 const server = createServer((req, res) => {

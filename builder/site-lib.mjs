@@ -100,6 +100,10 @@ export async function readV2Lines(source) {
   return lines;
 }
 
+// Reddit was founded in June 2005; anything earlier is a bad parse (same
+// sanity window as the Space's postDateMs).
+const MIN_SANE_POST_MS = Date.parse('2005-06-01T00:00:00.000Z');
+
 /** Group deduped records into PostSummaries (the Space's record-store shape). */
 export function buildSummaries(unique) {
   const byPost = new Map();
@@ -116,8 +120,17 @@ export function buildSummaries(unique) {
     const sl = last.metrics?.score ?? null;
     const cf = first.metrics?.comments ?? null;
     const cl = last.metrics?.comments ?? null;
-    const postAt = sightings.map((s) => s.post_at).find((t) => typeof t === 'string' && t.length > 0) ?? null;
-    const postAtMs = postAt ? Date.parse(postAt) : null;
+    // skip unparseable or out-of-bounds post_at values and keep scanning,
+    // like the Space's postDateMs
+    const ceiling = Date.now() + 86_400_000;
+    let postAtMs = null;
+    for (const s of sightings) {
+      if (typeof s.post_at !== 'string' || s.post_at.length === 0) continue;
+      const ms = Date.parse(s.post_at);
+      if (!Number.isFinite(ms) || ms < MIN_SANE_POST_MS || ms > ceiling) continue;
+      postAtMs = ms;
+      break;
+    }
     return {
       post_id,
       subreddit: last.subreddit ?? first.subreddit ?? null,
@@ -127,7 +140,7 @@ export function buildSummaries(unique) {
       content_href: last.content_href ?? first.content_href ?? null,
       thumb_href: last.thumb_href ?? first.thumb_href ?? null,
       post_type: last.post_type ?? first.post_type ?? null,
-      post_at: Number.isFinite(postAtMs) && postAtMs > 1117584000000 && postAtMs < Date.now() + 86400000 ? postAtMs : null,
+      post_at: postAtMs,
       first_seen: first.captured_at,
       last_seen: last.captured_at,
       observations: sightings.length,
