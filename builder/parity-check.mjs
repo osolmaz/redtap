@@ -4,7 +4,10 @@
 // require a high match rate rather than byte equality.
 //
 // Usage: node builder/parity-check.mjs [--space https://osolmaz-redtap-space.hf.space] [--dist builder/dist]
+// The build runs first inside this process (spawn, no shell) so a runner that
+// executes checks in parallel can never race the dist the comparison reads.
 
+import { spawnSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -42,6 +45,13 @@ function overlapRate(a, b) {
   let hits = 0;
   for (const x of a) if (setB.has(x)) hits += 1;
   return a.length === 0 ? 1 : hits / a.length;
+}
+
+// Build the site first: the comparison below reads only what this build wrote.
+const build = spawnSync(process.execPath, [join(here, 'build-site.mjs'), '--from-space', space], { stdio: 'inherit' });
+if (build.status !== 0) {
+  console.error('PARITY FAILED: build step exited', build.status, build.error ?? '');
+  process.exit(1);
 }
 
 let fails = 0;
