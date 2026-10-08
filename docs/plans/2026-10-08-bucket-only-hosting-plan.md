@@ -108,3 +108,10 @@ server that Onur starts when he wants it, and he reaches it over Tailscale. The 
    expected markers. Backend equivalence: the local backend and the hub read path produce identical
    summaries for the same fixture segments.
 6. **README.** Document starting the server with each backend and the Tailscale note.
+7. **Static-snapshot date navigation.** The renderer's prev/next and sort-tab
+   links use date-shaped paths (`/<date>/`, `/<from>/<to>/`). The local server
+   resolves them on demand; the pre-rendered Pages snapshot only writes the
+   `/day/<date>/` shapes, so on Pages those links 404 — the same
+   "only precomputed sorts and scopes" limitation section 4 already records.
+   The local server is the primary interface; do not bloat the snapshot with
+   the full date-route closure.

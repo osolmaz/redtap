@@ -6,6 +6,7 @@
 //   Writes v2 segments next to v1 under v2/log/... and prints the gate result.
 
 import { createHash } from 'node:crypto';
+import { readFileSync } from 'node:fs';
 import { gunzipSync } from 'node:zlib';
 import { setDefaultResultOrder } from 'node:dns';
 setDefaultResultOrder('ipv4first');
@@ -17,7 +18,10 @@ const token = (() => {
   const i = process.argv.indexOf('--token');
   if (i > 0) return process.argv[i + 1];
   const j = process.argv.indexOf('--token-file');
-  if (j > 0) return process.argv[j + 1] === '-' ? process.stdin : undefined;
+  if (j > 0) {
+    const path = process.argv[j + 1];
+    return path === '-' ? readFileSync(0, 'utf-8').trim() : readFileSync(path, 'utf-8').trim();
+  }
   return undefined; // the hub reads its own env/config when omitted
 })();
 

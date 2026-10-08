@@ -220,7 +220,12 @@ export async function flushNowNow() {
 
 export async function initPoolSync() {
   await loadState();
-  chrome.alarms.create(SEAL_ALARM, { periodInMinutes: 120, delayInMinutes: 2 });
+  // alarms.create replaces an existing alarm of the same name, and the 1-minute
+  // control poll wakes this worker constantly — recreating the seal alarm on
+  // every wake would push its deadline out forever and seals would never run.
+  // Create it once and let the 120-minute period recur.
+  const sealAlarm = await chrome.alarms.get(SEAL_ALARM);
+  if (!sealAlarm) chrome.alarms.create(SEAL_ALARM, { periodInMinutes: 120, delayInMinutes: 2 });
   chrome.alarms.onAlarm.addListener((alarm) => {
     if (alarm.name === SEAL_ALARM) {
       backoffMs = 0;
