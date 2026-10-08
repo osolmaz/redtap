@@ -80,3 +80,31 @@ A segment has two kinds of line:
 7. **After 14 clean days:** with your OK, delete the Space, revoke its token, and remove `space/` and `v1/` (19 MB).
 
 Before you build, check two things that I could not confirm: the exact Xet upload endpoints, and whether a fine-grained token can target one bucket. Shell commands needed approval in this session, so I read only the Space source. The rest of the design does not change if either answer differs.
+
+---
+
+## Revision 2 — local-first serving with pluggable backends (2026-10-08, Onur)
+
+Onur rejected the scheduled-Actions serving model: no cron jobs. The site is served by a local
+server that Onur starts when he wants it, and he reaches it over Tailscale. The ingestion design
+(extension → bucket, v2 layout, backfill gate) is unchanged and already implemented on this branch.
+
+1. **Server.** Add `builder/serve.mjs`: one command, no build step. It reads the data, renders the
+   same routes as `build-site.mjs` on demand (rendered pages cached in memory), and serves them over
+   plain HTTP. Flags: `--host` (default `0.0.0.0` so Tailscale works), `--port` (default `8088`),
+   optional `--base` for subpath serving.
+2. **Storage backends.** The server takes the data source as a flag. `--backend hf` reads the
+   private bucket through the existing Node-side hub read path in `build-site.mjs` (token from
+   `HF_TOKEN` or `~/.cache/huggingface/token`, never logged). `--backend local --dir <folder>` reads
+   the same `v2/log/…` segment layout from a local folder, so the data can live on disk. Choosing a
+   backend must be a one-flag change, nothing else.
+3. **One render path.** Extract whatever render/store code `build-site.mjs` duplicates so the
+   builder and the server share it. No forking of the renderer.
+4. **No scheduled builds.** `build-site.yml` loses its `schedule` trigger and keeps only
+   `workflow_dispatch`, as an optional manual Pages publisher. The local server is the primary way
+   to use redtap.
+5. **Tests.** `npm test` and the render smoke stay green. New serve smoke: start the server against
+   a small local-backend fixture, curl the index, a browse page, a post page, and `rss.xml`, assert
+   expected markers. Backend equivalence: the local backend and the hub read path produce identical
+   summaries for the same fixture segments.
+6. **README.** Document starting the server with each backend and the Tailscale note.
