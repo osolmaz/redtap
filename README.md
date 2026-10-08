@@ -19,12 +19,36 @@ along the lines of [xTap](https://github.com/mkubicek/xTap), for Reddit.
   protocol the [Infinite Feed Scroller](https://github.com/osolmaz/infinite-feed-scroller)
   uses with xTap, so the scroller can drive Reddit scrape jobs with subreddit
   feeds playing the role of X lists.
-- **Pool sync** mirrors xtap-pool: observations queue in the extension and
-  flush in batches with backoff to `space/` (a Hugging Face Docker Space,
-  deployed from this same repo via `scripts/deploy-space.sh`), which dedupes
-  by observation id and appends gzipped JSONL segments to the private
-  immutable Bucket log `osolmaz/redtap-data` (`v1/segments/post/…`). Configure
-  the Space URL + `POOL_TOKEN` in the extension options.
+- **Pool sync** writes to the private Hugging Face Bucket log
+  `osolmaz/redtap-data` directly from the extension worker (no server):
+  observations queue in the extension and one sealed, gzipped v2 batch is
+  committed per 2-hour cycle with idempotent fixed-path retries and
+  Retry-After-aware backoff; on auth failure it shows a red badge and keeps a
+  30-day local buffer. Configure the bucket + HF token in the extension
+  options. The legacy Space path (`POOL_TOKEN` + `space/`) still works until
+  the production cutover.
+
+## Serving the site locally
+
+The site is a plain Node server — no build step, nothing scheduled:
+
+```
+node builder/serve.mjs --backend hf        # read the private HF bucket
+node builder/serve.mjs --backend local --dir ~/path/to/redtap-data
+```
+
+Both backends read the same `v2/log/…` segment layout; choosing one is a
+one-flag change. `--backend hf` authenticates with `--token`, `$HF_TOKEN`, or
+`~/.cache/huggingface/token`, in that order, and never logs it. The server
+renders every route on demand (browse grid, day pages, post pages, `rss.xml`)
+and listens on `0.0.0.0:8088` by default (`--host`/`--port` to change), so it
+is reachable from your Tailnet on this machine's Tailscale IP. Add `--base
+/redtap` to serve under a subpath. Restart the server to pick up new data.
+
+`builder/build-site.mjs` still pre-renders the same routes to a static
+folder, and `.github/workflows/build-site.yml` publishes it to GitHub Pages —
+manual trigger only, never scheduled.
+
 
 
 ## Why DOM capture
