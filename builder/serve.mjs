@@ -76,8 +76,11 @@ function notFound() {
 
 const server = createServer((req, res) => {
   let pathname;
+  let searchParams;
   try {
-    pathname = decodeURIComponent(new URL(req.url, 'http://localhost').pathname);
+    const parsed = new URL(req.url, 'http://localhost');
+    pathname = decodeURIComponent(parsed.pathname);
+    searchParams = parsed.searchParams;
   } catch {
     res.writeHead(400).end('bad request');
     return;
@@ -91,9 +94,16 @@ const server = createServer((req, res) => {
     // absolute links inside the feed follow the host the visitor used, so
     // they work the same over localhost and Tailscale
     const siteUrl = `http://${req.headers.host ?? 'localhost'}${BASE}`;
+    // the date form GETs ?from=&to= (and friends) onto the scope path;
+    // non-empty params fill gaps in the path-derived query, like the Space
+    const overrides = {};
+    for (const key of ['from', 'to', 'sort', 'range', 'subreddit']) {
+      const value = searchParams.get(key);
+      if (value) overrides[key] = value;
+    }
     const rendered = pathname.startsWith('/static/')
       ? serveStatic(pathname)
-      : renderRoute(pathname, { ...state, siteUrl });
+      : renderRoute(pathname, { ...state, siteUrl }, overrides);
     if (!rendered) {
       const nf = notFound();
       res.writeHead(404, { 'content-type': nf.type }).end(nf.body);
