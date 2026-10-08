@@ -1,13 +1,13 @@
 name: build-site
 
-# The bucket-only builder: reads the private redtap-data bucket, pre-renders
-# the site, deploys to GitHub Pages. Runs every 2 hours and on demand.
+# Optional manual Pages publisher: reads the private redtap-data bucket,
+# pre-renders the site, deploys to GitHub Pages. Nothing scheduled — the
+# primary way to use redtap is the local server (builder/serve.mjs); run
+# this workflow by hand only when you want a Pages snapshot.
 # Requires: Pages enabled (Source: GitHub Actions) and an HF_TOKEN secret
 # with read access to osolmaz/redtap-data.
 
 on:
-  schedule:
-    - cron: '17 */2 * * *'
   workflow_dispatch: {}
 
 permissions:
