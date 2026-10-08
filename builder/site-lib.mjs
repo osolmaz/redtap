@@ -206,7 +206,7 @@ const cache = (state, key, build) => state[key] ?? (state[key] = build(state));
 /** Resolve one route to rendered content. `pathname` accepts either a URL-style
  *  path ('/hot/day/', '/r/LocalLLaMA/comments/t3_x/') or an output-relative path
  *  ('hot/index.html', 'rss.xml'). Returns {body, type} or null when unknown. */
-export function renderRoute(pathname, state) {
+export function renderRoute(pathname, state, queryOverrides) {
   const { summaries, byPost, now, base = '', siteUrl = '' } = state;
   let p = String(pathname).replace(/^\/+/, '');
   if (p === 'index.html' || p.endsWith('/index.html')) p = p.slice(0, -'index.html'.length);
@@ -227,7 +227,8 @@ export function renderRoute(pathname, state) {
 
   if (p === '/days/') {
     const days = dataDays(summaries);
-    return { type: 'text/html', body: withBase(`<!doctype html><html><head><meta charset="utf-8"><title>days — redtap</title></head><body><ul>${days.map((d) => `<li><a href="./${d}/">${d}</a></li>`).join('')}</ul></body></html>`, base) };
+    // link the routable /day/<date>/ pages (root-relative, so withBase prefixes them)
+    return { type: 'text/html', body: withBase(`<!doctype html><html><head><meta charset="utf-8"><title>days — redtap</title></head><body><ul>${days.map((d) => `<li><a href="/day/${d}/">${d}</a></li>`).join('')}</ul></body></html>`, base) };
   }
 
   // post pages
@@ -242,40 +243,47 @@ export function renderRoute(pathname, state) {
   // browse pages
   const q = parseBrowseQuery(p, cache(state, '_subByPath', subredditByPath));
   if (!q) return null;
-  return { type: 'text/html', body: withBase(renderBrowsePage(summaries, q, now), base) };
+  let query = q;
+  if (queryOverrides) {
+    const overrides = Object.fromEntries(Object.entries(queryOverrides).filter(([, v]) => v !== undefined && v !== ''));
+    query = { ...q, ...overrides };
+  }
+  return { type: 'text/html', body: withBase(renderBrowsePage(summaries, query, now), base) };
 }
 
+const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+
 /** Map a directory-style path to a renderBrowsePage query (subMap: path key →
- *  subreddit value as stored in the data), or null. */
+ *  subreddit value as stored in the data), or null. Mirrors the Space's
+ *  segment walk: /r/{sub}/ prefix, one sort keyword, one range keyword (until
+ *  a date appears), and up to two dates — a single date is a day page. The
+ *  /day/<date>/ static-build shape resolves to the same day query. */
 function parseBrowseQuery(p, subMap) {
   if (p === '/') return {};
-  // day pages before the generic <sort>/<range> shapes ('day' is not a sort,
-  // but the two-segment regex would otherwise swallow the day path)
-  let m = /^\/day\/(\d{4}-\d{2}-\d{2})\/$/.exec(p);
-  if (m) return { sort: 'hot', from: m[1], to: m[1] };
-  m = /^\/day\/(\d{4}-\d{2}-\d{2})\/([^/]+)\/$/.exec(p);
-  if (m) return SORTS.includes(m[2]) ? { sort: m[2], from: m[1], to: m[1] } : null;
-  m = /^\/r\/([^/]+)\/$/.exec(p);
-  if (m) {
-    const sub = subMap.get(m[1]);
-    return sub ? { subreddit: sub } : null;
+  let seg = p.split('/').filter(Boolean);
+  let subreddit;
+  if (seg[0] === 'r' && seg[1]) {
+    subreddit = subMap.get(seg[1]);
+    if (!subreddit) return null;
+    seg.splice(0, 2);
   }
-  m = /^\/r\/([^/]+)\/([^/]+)\/$/.exec(p);
-  if (m) {
-    const sub = subMap.get(m[1]);
-    if (!sub) return null;
-    if (SORTS.includes(m[2])) return { subreddit: sub, sort: m[2] };
-    return null;
+  if (seg[0] === 'day') seg = seg.slice(1); // the static build's day-page prefix
+  let sort;
+  let range;
+  const dates = [];
+  for (const s of seg) {
+    if (!sort && SORTS.includes(s)) sort = s;
+    else if (!range && dates.length === 0 && RANGES.includes(s)) range = s;
+    else if (dates.length < 2 && DATE_RE.test(s)) dates.push(s);
+    else return null; // unrecognized segment
   }
-  m = /^\/r\/([^/]+)\/([^/]+)\/([^/]+)\/$/.exec(p);
-  if (m) {
-    const sub = subMap.get(m[1]);
-    if (!sub || !SORTS.includes(m[2]) || !RANGES.includes(m[3])) return null;
-    return { subreddit: sub, sort: m[2], range: m[3] };
-  }
-  m = /^\/([^/]+)\/$/.exec(p);
-  if (m) return SORTS.includes(m[1]) ? { sort: m[1] } : null;
-  m = /^\/([^/]+)\/([^/]+)\/$/.exec(p);
-  if (m) return SORTS.includes(m[1]) && RANGES.includes(m[2]) ? { sort: m[1], range: m[2] } : null;
-  return null;
+  if (dates.length === 1) dates.push(dates[0]);
+  if (dates.length === 0 && !sort && !range && !subreddit) return null;
+  return {
+    subreddit,
+    sort,
+    range: dates.length > 0 ? undefined : range,
+    from: dates[0],
+    to: dates[1],
+  };
 }

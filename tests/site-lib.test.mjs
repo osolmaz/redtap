@@ -61,9 +61,16 @@ test('renderRoute resolves every route family and rejects unknown paths', async 
   assert.ok(renderRoute('/', state).body.includes('Fixture post'));
   assert.ok(renderRoute('/hot/day/', state).body.includes('Fixture post'));
   assert.ok(renderRoute('/day/2026-10-08/', state).body.includes('Fixture post'));
+  // date shapes the pages themselves link: day nav (/date/ and /from/to/)
+  assert.ok(renderRoute('/2026-10-08/', state).body.includes('Fixture post'));
+  assert.ok(renderRoute('/2026-10-07/2026-10-09/', state).body.includes('Fixture post'));
+  assert.ok(renderRoute('/r/LocalLLaMA/2026-10-08/', state).body.includes('Fixture post'));
+  assert.ok(renderRoute('/hot/', state, { from: '2026-10-08', to: '2026-10-08' }).body.includes('Fixture post'));
   assert.ok(renderRoute('/r/LocalLLaMA/top/month/', state).body.includes('Fixture post'));
   assert.ok(renderRoute('/r/LocalLLaMA/comments/fix000/', state).body.includes('Fixture post'));
   assert.ok(renderRoute('/comments/fix001/', state).body.includes('Second fixture post'));
+  // the days index links the routable /day/<date>/ pages
+  assert.ok(renderRoute('/days/', state).body.includes('href="/day/2026-10-08/"'));
   assert.equal(renderRoute('/nope/', state), null);
   assert.equal(renderRoute('/r/Missing/comments/fix000/', state), null);
   assert.equal(renderRoute('/static/icon48.png', state), null);
