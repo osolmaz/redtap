@@ -42,7 +42,7 @@ ACCENT = "#FF4500"  # redtap's product accent: its icon, the upvote mark, the ca
 GAIN = "#1A7F37"  # the feed's score gain since capture, green as in the product
 
 NAME = "redtap"
-TAGLINE = ["Captures the Reddit posts you browse", "and serves them back as a feed."]
+TAGLINE = ["A passive Reddit scraper that captures", "the posts you browse and serves a feed."]
 
 
 @dataclass

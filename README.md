@@ -1,13 +1,14 @@
 # redtap
 
 <p align="center">
-  <img src="assets/cover.svg" alt="redtap: captures the Reddit posts you browse and serves them back as a feed" width="880">
+  <img src="assets/cover.svg" alt="redtap: a passive Reddit scraper that captures the posts you browse and serves a feed" width="880">
 </p>
 
-redtap is a browser extension that archives the Reddit posts you see while
-browsing. It captures each post from the page itself, syncs them to a private
-Hugging Face bucket, and serves the archive as a browsable feed — the same
-pipeline [xTap](https://github.com/mkubicek/xTap) runs for X.
+redtap is a passive Reddit scraper: a browser extension that archives the
+Reddit posts you see while browsing. It captures each post from the page
+itself, syncs them to a private Hugging Face bucket, and serves the archive
+as a browsable feed — the same pipeline
+[xTap](https://github.com/mkubicek/xTap) runs for X.
 
 ![redtap feed — hot posts for the past day](docs/screenshot.png)
 
