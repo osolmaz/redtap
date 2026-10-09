@@ -217,9 +217,8 @@ const STYLE = `    * { box-sizing: border-box; }
     .tabs a.on { background: #272729; color: #ff4500; }
     .tabs a:hover { color: #d7dcdc; }
     .wrap { max-width: 760px; margin: 16px auto; padding: 0 12px; }
-    .scopebar { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; row-gap: 8px; margin-bottom: 10px; }
-    .custom { flex-basis: 100%; }
-    .scopelabel { color: #818384; font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; margin-right: 4px; }
+    .scopelabel { color: #818384; font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; }
+    .rangebar { display: flex; align-items: center; gap: 4px; }
     .pill { color: #818384; text-decoration: none; font-size: 12px; border: 1px solid #343536; background: #1a1a1b; padding: 4px 10px; border-radius: 999px; }
     .pill.on { color: #ff4500; border-color: #ff4500; }
     .pill:hover { color: #d7dcdc; }
@@ -426,14 +425,8 @@ ${STYLE}  </style>  </style>
     <div class="headrow">
       <div class="logo">redtap <span>pool</span></div>
       <div class="count">${visible.length} posts · ${subreddits.length === 1 ? "1 sub" : subreddits.length + " subs"} · <a href="/rss.xml" style="color:#ff4500;text-decoration:none;font-weight:600">RSS</a></div>
-      <nav class="tabs">${tabLinks}</nav>
-    </div>
-  </header>
-  <div class="wrap">
-    ${timeNav}
-    <div class="scopebar">
       <span class="scopelabel">${scopeLabel ? escapeHtml(scopeLabel) : "posted"}</span>
-      ${rangeLinks}
+      <nav class="rangebar">${rangeLinks}</nav>
       <form class="custom" method="get" action="${scopeUrl()}">
         <input type="hidden" name="sort" value="${activeSort}" />
         ${pageState.subreddit ? `<input type="hidden" name="subreddit" value="${escapeHtml(pageState.subreddit)}" />` : ""}
@@ -441,7 +434,11 @@ ${STYLE}  </style>  </style>
         <input type="date" name="to" value="${to}" />
         <button type="submit">apply</button>
       </form>
+      <nav class="tabs">${tabLinks}</nav>
     </div>
+  </header>
+  <div class="wrap">
+    ${timeNav}
     <div class="pills">${subLinks}</div>
     ${rows || '<div class="empty">nothing pooled in this scope</div>'}
   </div>
