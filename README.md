@@ -3,6 +3,8 @@
 Passively captures Reddit posts as you browse and saves them locally as JSONL —
 along the lines of [xTap](https://github.com/mkubicek/xTap), for Reddit.
 
+![redtap feed — hot posts for the past day](docs/screenshot.png)
+
 ## What it does
 
 - A content script watches Reddit's server-rendered `shreddit-post` web
