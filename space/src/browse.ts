@@ -207,6 +207,7 @@ function scopeUrl(): string {
 
 const STYLE = `    * { box-sizing: border-box; }
     body { font: 14px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #0b1416; color: #d7dcdc; margin: 0; }
+    .alphanote { max-width: 960px; margin: 8px auto 0; padding: 6px 14px; border: 1px solid #343536; border-radius: 6px; color: #818384; font-size: 12px; text-align: center; }
     header { background: #1a1a1b; border-bottom: 1px solid #343536; padding: 10px 20px; position: sticky; top: 0; z-index: 2; }
     .headrow { display: flex; align-items: center; flex-wrap: wrap; gap: 6px 14px; max-width: 760px; margin: 0 auto; }
     .logo { font-weight: 700; font-size: 17px; color: #ff4500; letter-spacing: -0.5px; white-space: nowrap; }
@@ -419,7 +420,7 @@ export function renderBrowsePage(
   <link rel="icon" type="image/png" href="/static/icon48.png" />
   <link rel="alternate" type="application/rss+xml" title="redtap pool" href="/rss.xml" />
   <style>
-${STYLE}  </style>  </style>
+${STYLE}  </style>
 </head>
 <body>
   <header>
@@ -429,6 +430,7 @@ ${STYLE}  </style>  </style>
       <nav class="tabs">${tabLinks}</nav>
     </div>
   </header>
+  <div class="alphanote">alpha — under active development; things may move</div>
   <div class="wrap">
     ${timeNav}
     <div class="scopebar">
@@ -511,6 +513,7 @@ ${STYLE}  </style>
       <a class="backlink" href="${pageUrl({ subreddit: p.subreddit })}">← ${escapeHtml(p.subreddit ?? "pool")}</a>
     </div>
   </header>
+  <div class="alphanote">alpha — under active development; things may move</div>
   <div class="wrap">
     <article class="post postpage">
       <div class="vote">

@@ -21,12 +21,12 @@ along the lines of [xTap](https://github.com/mkubicek/xTap), for Reddit.
   feeds playing the role of X lists.
 - **Pool sync** writes to the private Hugging Face Bucket log
   `osolmaz/redtap-data` directly from the extension worker (no server):
-  observations queue in the extension and one sealed, gzipped v2 batch is
+  observations queue in the extension and one sealed, gzipped batch is
   committed per 2-hour cycle with idempotent fixed-path retries and
   Retry-After-aware backoff; on auth failure it shows a red badge and keeps a
   30-day local buffer. Configure the bucket + HF token in the extension
   options. The legacy Space path (`POOL_TOKEN` + `space/`) still works until
-  the production cutover.
+  the extension rollout completes.
 
 ## Serving the site locally
 
@@ -37,8 +37,8 @@ node builder/serve.mjs --backend hf        # read the private HF bucket
 node builder/serve.mjs --backend local --dir ~/path/to/redtap-data
 ```
 
-Both backends read the same `v2/log/…` segment layout; choosing one is a
-one-flag change. `--backend hf` authenticates with `--token`, `$HF_TOKEN`, or
+Both backends read the same segment layout; choosing one is a one-flag
+change. `--backend hf` authenticates with `--token`, `$HF_TOKEN`, or
 `~/.cache/huggingface/token`, in that order, and never logs it. The server
 renders every route on demand (browse grid, day pages, post pages, `rss.xml`)
 and listens on `0.0.0.0:8088` by default (`--host`/`--port` to change), so it
