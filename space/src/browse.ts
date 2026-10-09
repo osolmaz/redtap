@@ -210,7 +210,16 @@ const STYLE = `    * { box-sizing: border-box; }
     header { background: #1a1a1b; border-bottom: 1px solid #343536; padding: 10px 20px; position: sticky; top: 0; z-index: 2; }
     .headrow { display: flex; align-items: center; flex-wrap: wrap; gap: 6px 14px; max-width: 760px; margin: 0 auto; }
     .logo { font-weight: 700; font-size: 17px; color: #ff4500; letter-spacing: -0.5px; white-space: nowrap; }
-    .logo span { color: #d7dcdc; }
+    .subpick { position: relative; }
+    .subpick summary { list-style: none; cursor: pointer; user-select: none; display: inline-flex; align-items: center; gap: 8px; color: #d7dcdc; font-size: 13px; font-weight: 600; background: #1a1a1b; border: 1px solid #343536; border-radius: 999px; padding: 5px 12px; }
+    .subpick summary::-webkit-details-marker { display: none; }
+    .subpick summary:hover { color: #ff4500; }
+    .subpick .car { color: #818384; font-size: 10px; }
+    .subpick[open] .car { transform: rotate(180deg); }
+    .subpick .menu { position: absolute; top: calc(100% + 6px); left: 0; min-width: 200px; background: #1a1a1b; border: 1px solid #343536; border-radius: 8px; padding: 6px; display: flex; flex-direction: column; box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5); z-index: 5; }
+    .subpick .menu a { color: #d7dcdc; text-decoration: none; font-size: 13px; padding: 7px 10px; border-radius: 6px; white-space: nowrap; }
+    .subpick .menu a:hover { background: #272729; }
+    .subpick .menu a.on { color: #ff4500; }
     .count { color: #818384; font-size: 12px; }
     .tabs { display: flex; gap: 4px; margin-left: auto; }
     .tabs a { color: #818384; text-decoration: none; font-size: 13px; font-weight: 700; padding: 6px 12px; border-radius: 999px; }
@@ -226,7 +235,6 @@ const STYLE = `    * { box-sizing: border-box; }
     .custom input[type="date"] { background: #1a1a1b; color: #d7dcdc; border: 1px solid #343536; border-radius: 6px; font-size: 12px; padding: 3px 6px; color-scheme: dark; }
     .custom button { background: #272729; color: #d7dcdc; border: 1px solid #343536; border-radius: 6px; font-size: 12px; padding: 4px 10px; cursor: pointer; }
     .custom button:hover { color: #ff4500; }
-    .pills { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 12px; }
     .post { display: flex; gap: 10px; background: #1a1a1b; border: 1px solid #343536; border-radius: 6px; margin-bottom: 12px; padding: 10px 12px; }
     .post:hover { border-color: #565758; }
     .vote { width: 44px; flex: none; text-align: center; font-size: 12px; color: #d7dcdc; padding-top: 6px; }
@@ -344,12 +352,19 @@ export function renderBrowsePage(
     (r) =>
       `<a class="pill${r.key === activeRange && !from && !to ? " on" : ""}" href="${pageUrl({ range: r.key, from: "", to: "" })}">${r.label}</a>`,
   ).join("");
-  const subLinks = ['<a class="pill' + (pageState.subreddit ? "" : " on") + '" href="' + pageUrl({ subreddit: "" }) + '">all</a>'].concat(
+  // subreddit picker: r/-prefixed labels, current one marked in the menu
+  const rName = (s: string): string => (s.startsWith("r/") ? s : `r/${s}`);
+  const subItems = [
+    `<a class="${pageState.subreddit ? "" : "on"}" href="${pageUrl({ subreddit: "" })}">r/All</a>`,
+  ]
+    .concat(
     subreddits.map(
       (s) =>
-        `<a class="pill${s === pageState.subreddit ? " on" : ""}" href="${pageUrl({ subreddit: s })}">${escapeHtml(s)}</a>`,
-    ),
-  ).join("");
+        `<a class="${s === pageState.subreddit ? "on" : ""}" href="${pageUrl({ subreddit: s })}">${escapeHtml(rName(s))}</a>`,
+      ),
+    )
+    .join("");
+  const subLabel = pageState.subreddit ? escapeHtml(rName(pageState.subreddit)) : "r/All";
   // Hacker-News-style time navigation: every browsable window (a calendar
   // day, a custom range, or the day/week/month/year scopes) gets prev/next
   // links that shift the window by its own length.
@@ -405,16 +420,20 @@ export function renderBrowsePage(
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>redtap pool</title>
+  <title>redtap</title>
   <link rel="icon" type="image/png" href="/static/icon48.png" />
-  <link rel="alternate" type="application/rss+xml" title="redtap pool" href="/rss.xml" />
+  <link rel="alternate" type="application/rss+xml" title="redtap" href="/rss.xml" />
   <style>
 ${STYLE}  </style>  </style>
 </head>
 <body>
   <header>
     <div class="headrow">
-      <div class="logo">redtap <span>pool</span></div>
+      <div class="logo">redtap</div>
+      <details class="subpick">
+        <summary>${subLabel}<span class="car">▾</span></summary>
+        <div class="menu">${subItems}</div>
+      </details>
       <div class="count">${visible.length} posts · ${subreddits.length === 1 ? "1 sub" : subreddits.length + " subs"} · <a href="/rss.xml" style="color:#ff4500;text-decoration:none;font-weight:600">RSS</a></div>
       <nav class="tabs">${tabLinks}</nav>
     </div>
@@ -431,7 +450,6 @@ ${STYLE}  </style>  </style>
         <button type="submit">apply</button>
       </form>
     </div>
-    <div class="pills">${subLinks}</div>
     ${rows || '<div class="empty">nothing pooled in this scope</div>'}
   </div>
 </body>
@@ -488,7 +506,7 @@ export function renderPostPage(
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>${escapeHtml(p.title ?? p.post_id)} — redtap pool</title>
+  <title>${escapeHtml(p.title ?? p.post_id)} — redtap</title>
   <link rel="icon" type="image/png" href="/static/icon48.png" />
   <style>
 ${STYLE}  </style>
