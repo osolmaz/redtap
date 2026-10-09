@@ -4,8 +4,10 @@
   <img src="assets/cover.svg" alt="redtap: captures the Reddit posts you browse and serves them back as a feed" width="880">
 </p>
 
-Passively captures Reddit posts as you browse and saves them locally as JSONL —
-along the lines of [xTap](https://github.com/mkubicek/xTap), for Reddit.
+redtap is a browser extension that archives the Reddit posts you see while
+browsing. It captures each post from the page itself, syncs them to a private
+Hugging Face bucket, and serves the archive as a browsable feed — the same
+pipeline [xTap](https://github.com/mkubicek/xTap) runs for X.
 
 ![redtap feed — hot posts for the past day](docs/screenshot.png)
 
