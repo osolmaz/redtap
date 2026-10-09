@@ -25,8 +25,7 @@ along the lines of [xTap](https://github.com/mkubicek/xTap), for Reddit.
   committed per 2-hour cycle with idempotent fixed-path retries and
   Retry-After-aware backoff; on auth failure it shows a red badge and keeps a
   30-day local buffer. Configure the bucket + HF token in the extension
-  options. The legacy Space path (`POOL_TOKEN` + `space/`) still works until
-  the extension rollout completes.
+  options.
 
 ## Serving the site locally
 
