@@ -52,9 +52,9 @@ export function renderRss(posts: PostSummary[], origin: string): string {
   return `<?xml version="1.0" encoding="UTF-8"?>
 <rss version="2.0">
   <channel>
-    <title>redtap pool — r/LocalLLaMA (daily hot)</title>
+    <title>redtap — r/LocalLLaMA (daily hot)</title>
     <link>${xmlEscape(origin)}/</link>
-    <description>Today's hottest posts in the redtap pool, ranked by score gained</description>
+    <description>Today's hottest posts in redtap, ranked by score gained</description>
     <lastBuildDate>${rfc822(Date.now())}</lastBuildDate>
 ${items}
   </channel>
