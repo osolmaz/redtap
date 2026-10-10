@@ -346,6 +346,7 @@ initControl({
     const bag = await chrome.storage.local.get(['bucketRepo', 'hubToken']);
     return { bucketRepo: bag.bucketRepo ?? 'osolmaz/redtap-data', hubToken: bag.hubToken ?? '' };
   },
+  onFlush: () => flushNowNow(),
   heartbeat: async () => {
     const wall = await probeWall();
     const [logBag, bridgeLogTail] = await Promise.all([

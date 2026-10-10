@@ -8,15 +8,15 @@ import { downloadFile } from './vendor/index.mjs';
 const CONTROL_PATHS = ['v1/control.json'];
 const APPLIED_CONTROL_KEY = 'lastAppliedControlDoc';
 
-export function initControl({ alarmApi = globalThis.chrome?.alarms, fetchImpl = globalThis.fetch, getConfig, heartbeat } = {}) {
+export function initControl({ alarmApi = globalThis.chrome?.alarms, fetchImpl = globalThis.fetch, getConfig, heartbeat, onFlush } = {}) {
   if (!alarmApi) return;
   alarmApi.create(CONTROL_ALARM, { periodInMinutes: 1, delayInMinutes: 1 });
   alarmApi.onAlarm.addListener((alarm) => {
     if (alarm.name === CONTROL_ALARM) {
-      void poll(getConfig, fetchImpl, globalThis.chrome?.storage?.local, heartbeat);
+      void poll(getConfig, fetchImpl, globalThis.chrome?.storage?.local, heartbeat, onFlush);
     }
   });
-  void poll(getConfig, fetchImpl, globalThis.chrome?.storage?.local, heartbeat);
+  void poll(getConfig, fetchImpl, globalThis.chrome?.storage?.local, heartbeat, onFlush);
 }
 
 export const CONTROL_ALARM = 'redtap-control-poll';
@@ -38,7 +38,7 @@ async function readControl(config) {
   return null;
 }
 
-export async function poll(getConfig, fetchImpl = globalThis.fetch, storage = globalThis.chrome?.storage?.local, heartbeat = null) {
+export async function poll(getConfig, fetchImpl = globalThis.fetch, storage = globalThis.chrome?.storage?.local, heartbeat = null, onFlush = null) {
   let config = null;
   try {
     config = await getConfig();
@@ -48,7 +48,11 @@ export async function poll(getConfig, fetchImpl = globalThis.fetch, storage = gl
   if (!config || !config.bucketRepo) return;
   void fetchImpl;
   const control = await readControl(config);
-  if (!control || control?.reload !== true) return;
+  if (!control) return;
+  if (control.flush === true && typeof onFlush === 'function') {
+    try { await onFlush(); } catch {}
+  }
+  if (control?.reload !== true) return;
   // Loop guard: the flag file outlives the worker, and a fresh worker
   // forgets in-memory guards. Reload only when the flag document actually
   // changed since the last applied one; identical flag = no-op.
