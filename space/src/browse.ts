@@ -172,7 +172,7 @@ function card(p: PostSummary, now: number, sort: SortKey): string {
       ${body}
       <div class="foot">
         <span class="comments">💬 ${p.comments_last ?? "–"}${commentsDelta ? ` <span class="diff ${deltaClass(p.comments_delta)}">(${commentsDelta})</span>` : ""}</span>
-        <a class="open" href="https://www.reddit.com${escapeHtml(p.permalink)}">open on reddit ↗</a>
+        <a class="open" href="https://www.reddit.com${escapeHtml(p.permalink)}" target="_blank" rel="noopener noreferrer">open on reddit ↗</a>
       </div>
     </div>
   </article>`;
@@ -539,7 +539,7 @@ ${STYLE}  </style>
         ${bodyHtml(p, "page")}
         ${chartHtml}
         ${history}
-        <a class="gobtn" href="${escapeHtml(redditUrl)}" target="_blank" rel="noreferrer">open on reddit ↗</a>
+        <a class="gobtn" href="${escapeHtml(redditUrl)}" target="_blank" rel="noopener noreferrer">open on reddit ↗</a>
         <span class="foot"><span class="comments">💬 ${p.comments_last ?? "–"}${commentsDelta ? ` <span class="diff ${deltaClass(p.comments_delta)}">(${commentsDelta})</span>` : ""}</span></span>
       </div>
     </article>

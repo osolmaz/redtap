@@ -51,8 +51,21 @@ const PORT = Number(arg('port', '8088'));
 const BASE = arg('base', '');
 
 console.error(`loading data from the ${backend} backend…`);
-const state = await siteState(source, { base: BASE });
+let state = await siteState(source, { base: BASE });
 console.error(`${state.summaries.length} posts ready`);
+
+// keep the feed alive: re-read the backend periodically so new sightings
+// show up without a restart, and never age pages against a stale clock
+const REFRESH_MS = 5 * 60_000;
+async function refreshState() {
+  try {
+    state = await siteState(source, { base: BASE });
+    console.error(`data refreshed — ${state.summaries.length} posts`);
+  } catch (err) {
+    console.error(`data refresh failed, serving the previous snapshot: ${err?.message ?? err}`);
+  }
+}
+setInterval(refreshState, REFRESH_MS).unref();
 
 const STATIC_ROOT = join(here, '..', 'space', 'static');
 const TYPES = {
@@ -103,7 +116,7 @@ const server = createServer((req, res) => {
     }
     const rendered = pathname.startsWith('/static/')
       ? serveStatic(pathname)
-      : renderRoute(pathname, { ...state, siteUrl }, overrides);
+      : renderRoute(pathname, { ...state, siteUrl, now: Date.now() }, overrides);
     if (!rendered) {
       const nf = notFound();
       res.writeHead(404, { 'content-type': nf.type }).end(nf.body);
