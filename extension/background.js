@@ -37,7 +37,7 @@ async function recordObservation(record) {
   if (prior && prior.observation_id === observation.observation_id) {
     if (!shouldSampleUnchanged(prior.lastSeenAtMs, Date.now())) return null;
   }
-  // No local archive: the bucket's v2 log is the archive. Writing a growing
+  // No local archive: the bucket's v1 log is the archive. Writing a growing
   // array here re-serialized megabytes per capture and wedged the worker.
   samples[observation.post_id] = {
     observation_id: observation.observation_id,
@@ -47,7 +47,7 @@ async function recordObservation(record) {
   return observation;
 }
 
-// Local JSONL exports removed: the bucket's v2 log supersedes them.
+// Local JSONL exports removed: the bucket's v1 log supersedes them.
 
 // (see above)
 
@@ -680,7 +680,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return true;
   }
   if (message?.type !== 'redtap:export') return;
-  // Local exports are gone; the bucket's v2 log is the data path.
+  // Local exports are gone; the bucket's v1 log is the data path.
   sendResponse({ exported: 0 });
   return true;
 });

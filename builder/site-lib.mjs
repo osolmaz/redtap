@@ -2,7 +2,7 @@
 //
 // build-site.mjs (static pre-render for Pages) and serve.mjs (local server)
 // both go through this module, so the two never fork the renderer: the same
-// renderRoute() powers every route, and the same readV2Lines() powers both
+// renderRoute() powers every route, and the same readV1Lines() powers both
 // storage backends (HF bucket or a local folder).
 
 import { createHash } from 'node:crypto';
@@ -10,7 +10,7 @@ import { gunzipSync } from 'node:zlib';
 import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { listFiles, downloadFile } from '@huggingface/hub';
-import { fromV2Lines } from '../extension/lib/v2log.js';
+import { fromV1Lines } from '../extension/lib/v1log.js';
 import { renderBrowsePage, renderPostPage } from '../space/src/browse.ts';
 import { renderRss } from '../space/src/rss.ts';
 
@@ -25,7 +25,7 @@ export function withBase(html, base) {
   return html.replaceAll('href="/', 'href="' + base + '/').replaceAll('action="/', 'action="' + base + '/');
 }
 
-/** Parse one v2 segment (gzipped or plain JSONL) into line objects. */
+/** Parse one v1 segment (gzipped or plain JSONL) into line objects. */
 export function parseSegment(rel, bytes) {
   const text = rel.endsWith('.gz') ? gunzipSync(bytes).toString('utf-8') : bytes.toString('utf-8');
   const lines = [];
@@ -46,26 +46,26 @@ function walkJsonl(dir, out) {
   }
 }
 
-/** All v2 segment paths under a local bucket-root mirror (a folder holding v2/log/…,
+/** All v1 segment paths under a local bucket-root mirror (a folder holding v1/log/…,
  *  or directly the segment folder). Sorted for a deterministic read order. */
 export function listLocalSegments(dir) {
   let base = dir;
   try {
-    readdirSync(join(dir, 'v2', 'log'));
-    base = join(dir, 'v2', 'log'); // a bucket-root mirror with v2/log inside
+    readdirSync(join(dir, 'v1', 'log'));
+    base = join(dir, 'v1', 'log'); // a bucket-root mirror with v1/log inside
   } catch { /* dir itself is the segment folder */ }
   const out = [];
   walkJsonl(base, out);
   return out.sort();
 }
 
-/** Read every v2 segment line from a backend.
+/** Read every v1 segment line from a backend.
  *  - {kind:'local', dir}    a folder mirroring the bucket layout (or the log folder itself)
  *  - {kind:'hf', repo, token}   the private HF bucket via @huggingface/hub */
-export async function readV2Lines(source) {
+export async function readV1Lines(source) {
   if (source.kind === 'local') {
     const paths = listLocalSegments(source.dir);
-    console.error('v2 segments:', paths.length);
+    console.error('v1 segments:', paths.length);
     const lines = [];
     for (const path of paths) {
       lines.push(...parseSegment(path, readFileSync(path)));
@@ -75,14 +75,14 @@ export async function readV2Lines(source) {
   // hub wants a typed repo object for buckets
   const hubRepo = typeof source.repo === 'string' ? { type: 'bucket', name: source.repo } : source.repo;
   const paths = [];
-  for await (const entry of listFiles({ repo: hubRepo, accessToken: source.token, recursive: true, path: 'v2/log/', expand: false })) {
+  for await (const entry of listFiles({ repo: hubRepo, accessToken: source.token, recursive: true, path: 'v1/log/', expand: false })) {
     if (typeof entry === 'object' && 'path' in entry) {
       const p = String(entry.path);
       if (p.endsWith('.jsonl.gz') || p.endsWith('.jsonl')) paths.push(p);
     }
   }
   paths.sort();
-  console.error('v2 segments:', paths.length);
+  console.error('v1 segments:', paths.length);
   const lines = [];
   for (const path of paths) {
     for (let attempt = 1; ; attempt++) {
@@ -158,8 +158,8 @@ export function buildSummaries(unique) {
 
 /** Build the full render state from a backend source. */
 export async function siteState(source, opts = {}) {
-  const lines = await readV2Lines(source);
-  const records = fromV2Lines(lines);
+  const lines = await readV1Lines(source);
+  const records = fromV1Lines(lines);
   console.error('records:', records.length);
   const { summaries, byPost } = buildSummaries(records);
   return { summaries, byPost, now: opts.now ?? Date.now(), base: opts.base ?? '', siteUrl: opts.siteUrl ?? '' };

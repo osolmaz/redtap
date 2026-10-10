@@ -9,8 +9,8 @@ import { tmpdir } from 'node:os';
 import { gzipSync, gunzipSync } from 'node:zlib';
 import { randomUUID, createHash } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
-import { toV2Lines } from '../extension/lib/v2log.js';
-import { makeBucketMirror, fixtureRecords, POST_DAY } from './helpers/v2-fixture.mjs';
+import { toV1Lines } from '../extension/lib/v1log.js';
+import { makeBucketMirror, fixtureRecords, POST_DAY } from './helpers/v1-fixture.mjs';
 
 const digest = (bytes) => createHash('sha256').update(bytes).digest('hex');
 const mkdtemp = () => mkdtempSync(join(tmpdir(), 'redtap-test-'));
@@ -109,16 +109,16 @@ test('the server applies a base prefix when asked', async () => {
   }
 });
 
-test('the server ingests a sealed v2 segment and shows it on the feed', async () => {
+test('the server ingests a sealed v1 segment and shows it on the feed', async () => {
   const watchDir = join(await mkdtemp(), 'redtap-outbox');
   const now = new Date();
-  mkdirSync(join(watchDir, 'v2', 'log', ...now.toISOString().slice(0, 10).split('-')), { recursive: true });
+  mkdirSync(join(watchDir, 'v1', 'log', ...now.toISOString().slice(0, 10).split('-')), { recursive: true });
   const { child, mirror, url } = await startServe(['--watch-dir', watchDir]);
   try {
     const record = { ...fixtureRecords()[0], observation_id: 'obs-ingest', post_id: 't3_fixingest', title: 'Ingested fixture post', captured_at: Date.now(), metrics: { score: 7, comments: 1, upvote_ratio: 0.8 } };
-    const lines = await toV2Lines([record], new Set(), digest);
+    const lines = await toV1Lines([record], new Set(), digest);
     const stamp = String(now.getTime()).padStart(13, '0');
-    const segPath = `v2/log/${now.toISOString().slice(0, 10).replace(/-/g, '/')}/${stamp}-${randomUUID()}.jsonl.gz`;
+    const segPath = `v1/log/${now.toISOString().slice(0, 10).replace(/-/g, '/')}/${stamp}-${randomUUID()}.jsonl.gz`;
     const text = lines.map((l) => JSON.stringify(l)).join('\n') + '\n';
     writeFileSync(join(watchDir, segPath), gzipSync(Buffer.from(text, 'utf-8')));
 

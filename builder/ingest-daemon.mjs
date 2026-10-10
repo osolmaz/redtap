@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // redtap ingest daemon (runs as bob): watches ~/Downloads/redtap-outbox/ for
-// sealed v2 segments dropped by the extension's downloads handoff and uploads
+// sealed v1 segments dropped by the extension's downloads handoff and uploads
 // each to the HF bucket, then deletes the file. No service units; started with
 // setsid nohup.
 import { readFileSync, readdirSync, rmSync, existsSync } from 'node:fs';
@@ -10,7 +10,7 @@ import { uploadFile } from '/home/bob/repos/redtap/extension/lib/vendor/index.mj
 const ROOT = '/home/bob/Downloads/redtap-outbox';
 const TOKEN = readFileSync('/tmp/rt-hf-token', 'utf-8').trim();
 const REPO = { type: 'bucket', name: 'osolmaz/redtap-data' };
-const SEGMENT = /^v2\/log\/\d{4}\/\d{2}\/\d{2}\/\d{13}-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.jsonl\.gz$/;
+const SEGMENT = /^v1\/log\/\d{4}\/\d{2}\/\d{2}\/\d{13}-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.jsonl\.gz$/;
 const inFlight = new Set();
 
 async function ingestFile(absPath, relPath) {
@@ -18,7 +18,7 @@ async function ingestFile(absPath, relPath) {
   inFlight.add(relPath);
   try {
     const gz = readFileSync(absPath);
-    await uploadFile({ repo: REPO, accessToken: TOKEN, file: { path: relPath, content: new Blob([gz]) }, commitTitle: 'redtap: sealed v2 segment' });
+    await uploadFile({ repo: REPO, accessToken: TOKEN, file: { path: relPath, content: new Blob([gz]) }, commitTitle: 'redtap: sealed v1 segment' });
     console.log(new Date().toISOString(), 'ingested', relPath, gz.length, 'bytes');
     rmSync(absPath);
   } catch (error) {
@@ -37,11 +37,11 @@ async function ingestFile(absPath, relPath) {
 function scan() {
   if (!existsSync(ROOT)) return;
   let found = [];
-  try { found = readdirSync(join(ROOT, 'v2', 'log'), { recursive: true }); } catch { return; }
+  try { found = readdirSync(join(ROOT, 'v1', 'log'), { recursive: true }); } catch { return; }
   for (const rel of found) {
     const norm = rel.replaceAll('\\\\', '/');
-    if (!SEGMENT.test('v2/log/' + norm)) continue;
-    ingestFile(join(ROOT, 'v2', 'log', rel), 'v2/log/' + norm);
+    if (!SEGMENT.test('v1/log/' + norm)) continue;
+    ingestFile(join(ROOT, 'v1', 'log', rel), 'v1/log/' + norm);
   }
 }
 

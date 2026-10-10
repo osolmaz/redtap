@@ -1,4 +1,4 @@
-// Static site builder: reads the v2 log from the HF bucket (or the live Space
+// Static site builder: reads the v1 log from the HF bucket (or the live Space
 // stopgap for parity checks) and pre-renders every route for GitHub Pages.
 // The render/store path lives in site-lib.mjs and is shared with serve.mjs.
 

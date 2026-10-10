@@ -1,8 +1,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { join } from 'node:path';
-import { withBase, parseSegment, listLocalSegments, readV2Lines, siteState, renderRoute, allRoutes, dataDays } from '../builder/site-lib.mjs';
-import { makeBucketMirror, POST_AT_MS, POST_DAY } from './helpers/v2-fixture.mjs';
+import { withBase, parseSegment, listLocalSegments, readV1Lines, siteState, renderRoute, allRoutes, dataDays } from '../builder/site-lib.mjs';
+import { makeBucketMirror, POST_AT_MS, POST_DAY } from './helpers/v1-fixture.mjs';
 
 test('withBase prefixes links and form targets, and is a no-op without a base', () => {
   const html = '<form action="/"><a href="/hot/">x</a>';
@@ -21,15 +21,15 @@ test('parseSegment reads gzip and plain segments and skips malformed lines', asy
 
 test('listLocalSegments finds segments in a mirror root and in a direct log folder', async () => {
   const root = await makeBucketMirror();
-  const segment = join(root, 'v2', 'log', ...POST_DAY.split('-'), POST_AT_MS + '-fixture.jsonl');
+  const segment = join(root, 'v1', 'log', ...POST_DAY.split('-'), POST_AT_MS + '-fixture.jsonl');
   assert.deepEqual(listLocalSegments(root), [segment]);
-  const logDir = join(root, 'v2', 'log');
+  const logDir = join(root, 'v1', 'log');
   assert.deepEqual(listLocalSegments(logDir), [segment]);
 });
 
 test('the local backend reads the same lines that were written', async () => {
   const root = await makeBucketMirror();
-  const lines = await readV2Lines({ kind: 'local', dir: root });
+  const lines = await readV1Lines({ kind: 'local', dir: root });
   const kinds = lines.map((l) => l.k);
   assert.equal(kinds.filter((k) => k === 'body').length, 1); // only the post with a selftext
   assert.equal(kinds.filter((k) => k === 'sight').length, 3);

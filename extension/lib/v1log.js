@@ -1,4 +1,4 @@
-// v2 segment format: bodies (selftext) stored once per hash, sightings as
+// v1 segment format: bodies (selftext) stored once per hash, sightings as
 // small lines carrying their own metadata plus the body hash.
 //
 //   {"k":"body","h":"<sha256 of selftext>","selftext":"..."}
@@ -55,10 +55,10 @@ export function sightLine(record, hash) {
   return line;
 }
 
-/** Split records into v2 lines: one body line per unseen selftext hash,
+/** Split records into v1 lines: one body line per unseen selftext hash,
  *  a sight per record. knownHashes: hashes committed in earlier segments;
  *  callers add newly seen hashes only after a successful commit. */
-export async function toV2Lines(records, knownHashes, digest) {
+export async function toV1Lines(records, knownHashes, digest) {
   const lines = [];
   const emitted = new Set();
   for (const record of records) {
@@ -80,8 +80,8 @@ export function hashesOf(lines) {
   return out;
 }
 
-/** Expand v2 lines back into observation records. */
-export function fromV2Lines(lines) {
+/** Expand v1 lines back into observation records. */
+export function fromV1Lines(lines) {
   const bodies = new Map();
   const records = [];
   for (const line of lines) {
@@ -122,7 +122,7 @@ export function fromV2Lines(lines) {
 }
 
 /** Parse raw JSONL text into line objects, skipping malformed lines. */
-export function parseV2Text(text) {
+export function parseV1Text(text) {
   const lines = [];
   for (const raw of text.split('\n')) {
     if (raw.trim() === '') continue;

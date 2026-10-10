@@ -32,7 +32,7 @@ if (backend !== 'hf' && backend !== 'local') {
   process.exit(2);
 }
 if (backend === 'local' && (!dir || !existsSync(dir))) {
-  console.error('backend "local" needs --dir pointing at a folder that holds v2/log/ segments (a bucket-root mirror works)');
+  console.error('backend "local" needs --dir pointing at a folder that holds v1/log/ segments (a bucket-root mirror works)');
   process.exit(2);
 }
 
@@ -52,11 +52,11 @@ const HOST = arg('host', '0.0.0.0');
 const PORT = Number(arg('port', '8088'));
 const BASE = arg('base', '');
 
-// Capture ingest: the extension hands sealed v2 segments to the downloads
+// Capture ingest: the extension hands sealed v1 segments to the downloads
 // folder via chrome.downloads; the server watches it and performs the bucket
 // write from node, where the hub client is proven.
 const WATCH_ROOT = arg('watch-dir', undefined) ?? join(homedir(), 'Downloads', 'redtap-outbox');
-const SEGMENT_PATH = /^v2\/log\/\d{4}\/\d{2}\/\d{2}\/\d{13}-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.jsonl\.gz$/;
+const SEGMENT_PATH = /^v1\/log\/\d{4}\/\d{2}\/\d{2}\/\d{13}-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.jsonl\.gz$/;
 const inFlight = new Set();
 
 async function ingestFile(absPath, relPath) {
@@ -75,7 +75,7 @@ async function ingestFile(absPath, relPath) {
         repo: { type: 'bucket', name: source.repo },
         accessToken: source.token,
         file: { path: relPath, content: new Blob([gz]) },
-        commitTitle: `redtap: ingest ${lines.length} v2 lines`,
+        commitTitle: `redtap: ingest ${lines.length} v1 lines`,
       });
     }
     console.error(`ingested ${relPath} (${lines.length} lines)`);
@@ -97,10 +97,10 @@ function startIngestWatcher() {
   mkdirSync(WATCH_ROOT, { recursive: true });
   const scan = () => {
     let found = [];
-    try { found = readdirSync(join(WATCH_ROOT, 'v2', 'log'), { recursive: true }); } catch { return; }
+    try { found = readdirSync(join(WATCH_ROOT, 'v1', 'log'), { recursive: true }); } catch { return; }
     for (const rel of found) {
-      if (!SEGMENT_PATH.test('v2/log/' + rel.replaceAll('\\', '/'))) continue;
-      ingestFile(join(WATCH_ROOT, 'v2', 'log', rel), 'v2/log/' + rel.replaceAll('\\', '/'));
+      if (!SEGMENT_PATH.test('v1/log/' + rel.replaceAll('\\', '/'))) continue;
+      ingestFile(join(WATCH_ROOT, 'v1', 'log', rel), 'v1/log/' + rel.replaceAll('\\', '/'));
     }
   };
   scan();

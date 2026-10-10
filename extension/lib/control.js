@@ -1,11 +1,11 @@
 // redtap control channel — the worker polls a control JSON that lives in
-// the pool bucket itself (v2/control.json, then the legacy v1 path during
+// the pool bucket itself (v1/control.json, then the legacy v1 path during
 // the transition). Written from outside with `hf buckets cp`. The reload
 // flag keeps its loop guard: identical documents never re-trigger.
 
 import { downloadFile } from './vendor/index.mjs';
 
-const CONTROL_PATHS = ['v2/control.json'];
+const CONTROL_PATHS = ['v1/control.json'];
 const APPLIED_CONTROL_KEY = 'lastAppliedControlDoc';
 
 export function initControl({ alarmApi = globalThis.chrome?.alarms, fetchImpl = globalThis.fetch, getConfig, heartbeat } = {}) {

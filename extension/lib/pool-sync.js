@@ -2,14 +2,14 @@
 //
 // Captured observations append to a persistent outbox in
 // chrome.storage.local. Once per seal cycle (2h) the outbox is converted to
-// v2 lines (bodies once per hash, tiny sight lines) and POSTed to the local
+// v1 lines (bodies once per hash, tiny sight lines) and POSTed to the local
 // redtap server's /ingest endpoint, which performs the bucket write from
 // node. The cycle's path+uuid persist until a commit succeeds, so retries
 // are idempotent. On 429 the seal honors Retry-After with exponential
 // backoff; on 401/403 the writer stops (red badge) and keeps buffering for
 // up to 30 days.
 
-import { bodyHash, EMPTY_BODY_HASH, hashesOf, toV2Lines } from './v2log.js';
+import { bodyHash, EMPTY_BODY_HASH, hashesOf, toV1Lines } from './v1log.js';
 
 const OUTBOX_KEY = 'poolOutbox';
 const HASHES_KEY = 'poolBodyHashes';
@@ -57,7 +57,7 @@ function persistCycle() {
   return storage().set({ [CYCLE_KEY]: cycle });
 }
 
-/** Digest for v2log: hex sha256 via the worker's crypto.subtle. */
+/** Digest for v1log: hex sha256 via the worker's crypto.subtle. */
 async function digest(bytes) {
   const view = await crypto.subtle.digest('SHA-256', bytes);
   return [...new Uint8Array(view)].map((b) => b.toString(16).padStart(2, '0')).join('');
@@ -110,7 +110,7 @@ export function setConfig(next, flushNowFlag = false) {
   if (flushNowFlag) void sealNow(true);
 }
 
-/** Seal the outbox as one v2 segment and commit it. force seals early (tests). */
+/** Seal the outbox as one v1 segment and commit it. force seals early (tests). */
 export async function sealNow(force = false) {
   const trace = (event, detail) => {
     try { console.log('[redtap-seal]', event, JSON.stringify(detail ?? {})); } catch {}
@@ -128,7 +128,7 @@ export async function sealNow(force = false) {
     outbox = outbox.filter((r) => (r._admittedAt ?? Date.now()) >= cutoff);
 
     const records = outbox.map(({ _admittedAt, ...record }) => record);
-    let lines = await toV2Lines(records, knownHashes, digest);
+    let lines = await toV1Lines(records, knownHashes, digest);
     if (lines.length === 0) { trace('deduped-to-zero'); outbox = []; await storage().set({ [OUTBOX_KEY]: outbox }); return 0; }
     trace('lines', { count: lines.length });
     // A record contributes one sight line plus a body line when its selftext is
@@ -149,7 +149,7 @@ export async function sealNow(force = false) {
         count += 1 + bodyLines;
         sealed.push(record);
       }
-      lines = await toV2Lines(sealed, knownHashes, digest);
+      lines = await toV1Lines(sealed, knownHashes, digest);
     }
     const sealedIds = new Set(sealed.map((r) => r.observation_id));
     const sealedCount = sealed.length;
@@ -160,7 +160,7 @@ export async function sealNow(force = false) {
       const uuid = crypto.randomUUID();
       const stamp = String(now.getTime()).padStart(13, '0');
       const day = now.toISOString().slice(0, 10).replace(/-/g, '/');
-      cycle = { path: `v2/log/${day}/${stamp}-${uuid}.jsonl.gz`, uuid, sealedAtMs: now.getTime() };
+      cycle = { path: `v1/log/${day}/${stamp}-${uuid}.jsonl.gz`, uuid, sealedAtMs: now.getTime() };
       await persistCycle();
     }
 

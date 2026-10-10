@@ -1,10 +1,10 @@
-// Shared fixture: a tiny v2 log (two posts, one with two sightings) written to
+// Shared fixture: a tiny v1 log (two posts, one with two sightings) written to
 // a bucket-root-mirror folder layout, plus helpers to load the server state.
 import { mkdtempSync, mkdirSync, writeFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { toV2Lines } from '../../extension/lib/v2log.js';
+import { toV1Lines } from '../../extension/lib/v1log.js';
 
 const digest = (bytes) => createHash('sha256').update(bytes).digest('hex');
 
@@ -40,11 +40,11 @@ export function fixtureRecords() {
   ];
 }
 
-/** Write a bucket-root mirror (v2/log/ segments) and return its path. */
+/** Write a bucket-root mirror (v1/log/ segments) and return its path. */
 export async function makeBucketMirror() {
   const root = mkdtempSync(join(tmpdir(), 'redtap-serve-fixture-'));
-  const lines = await toV2Lines(fixtureRecords(), new Set(), digest);
-  const segDir = join(root, 'v2', 'log', ...new Date(POST_AT_MS).toISOString().slice(0, 10).split('-'));
+  const lines = await toV1Lines(fixtureRecords(), new Set(), digest);
+  const segDir = join(root, 'v1', 'log', ...new Date(POST_AT_MS).toISOString().slice(0, 10).split('-'));
   mkdirSync(segDir, { recursive: true });
   writeFileSync(join(segDir, POST_AT_MS + '-fixture.jsonl'), lines.map((l) => JSON.stringify(l)).join('\n') + '\n');
   return root;
