@@ -10,7 +10,7 @@ import { uploadFile } from '/home/bob/repos/redtap/extension/lib/vendor/index.mj
 const ROOT = '/home/bob/Downloads/redtap-outbox';
 const TOKEN = readFileSync('/tmp/rt-hf-token', 'utf-8').trim();
 const REPO = { type: 'bucket', name: 'osolmaz/redtap-data' };
-const SEGMENT = /^v1\/log\/\d{4}\/\d{2}\/\d{2}\/\d{13}-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.jsonl\.gz$/;
+const SEGMENT = /^v1\/log\/\d{4}\/\d{2}\/\d{2}\/\d{13}-[0-9a-z-]{30,40}\.jsonl\.gz$/;
 const inFlight = new Set();
 
 async function ingestFile(absPath, relPath) {
