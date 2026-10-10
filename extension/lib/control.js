@@ -5,7 +5,7 @@
 
 import { downloadFile } from './vendor/index.mjs';
 
-const CONTROL_PATHS = ['v2/control.json', 'control/instructions.json'];
+const CONTROL_PATHS = ['v2/control.json'];
 const APPLIED_CONTROL_KEY = 'lastAppliedControlDoc';
 
 export function initControl({ alarmApi = globalThis.chrome?.alarms, fetchImpl = globalThis.fetch, getConfig, heartbeat } = {}) {
@@ -45,7 +45,7 @@ export async function poll(getConfig, fetchImpl = globalThis.fetch, storage = gl
   } catch {
     return;
   }
-  if (!config || !config.bucketRepo && !config.poolUrl) return;
+  if (!config || !config.bucketRepo) return;
   void fetchImpl;
   const control = await readControl(config);
   if (!control || control?.reload !== true) return;

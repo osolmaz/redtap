@@ -80,7 +80,7 @@ export function hashesOf(lines) {
   return out;
 }
 
-/** Expand v2 lines back into v1-shaped observation records. */
+/** Expand v2 lines back into observation records. */
 export function fromV2Lines(lines) {
   const bodies = new Map();
   const records = [];

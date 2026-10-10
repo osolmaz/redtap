@@ -20,7 +20,7 @@ const MAX_LINES_PER_COMMIT = 4000;
 const BACKOFF_BASE_MS = 30_000;
 const BACKOFF_MAX_MS = 15 * 60_000;
 const OUTBOX_RETENTION_MS = 30 * 24 * 3600_000;
-export const CONFIG_KEYS = ['poolUrl', 'poolToken', 'poolPaused', 'poolSubs', 'poolStats', 'bucketRepo', 'hubToken'];
+export const CONFIG_KEYS = ['poolPaused', 'poolSubs', 'poolStats', 'bucketRepo', 'hubToken'];
 export const DEFAULT_SUBS = ['LocalLLaMA'];
 export const DEFAULT_BUCKET = 'osolmaz/redtap-data';
 const SEAL_ALARM = 'redtap-pool-seal';
@@ -29,7 +29,7 @@ const INGEST_FOLDER = 'redtap-outbox';
 let outbox = [];
 let knownHashes = new Set();
 let cycle = null; // { path, uuid, sealedAtMs } — fixed until its commit succeeds
-let config = { poolUrl: '', poolToken: '', bucketRepo: DEFAULT_BUCKET, hubToken: '', poolPaused: false, subs: DEFAULT_SUBS };
+let config = { bucketRepo: DEFAULT_BUCKET, hubToken: '', poolPaused: false, subs: DEFAULT_SUBS };
 let stats = { synced: 0, queued: 0, lastError: null, lastSyncAt: null };
 let sealTimer = null;
 let backoffMs = 0;
@@ -46,10 +46,8 @@ async function loadState() {
   cycle = bag[CYCLE_KEY] ?? null;
   stats = bag[STATE_KEY] ?? stats;
   config = {
-    poolUrl: typeof bag.poolUrl === 'string' ? bag.poolUrl : '',
-    poolToken: typeof bag.poolToken === 'string' ? bag.poolToken : '',
     bucketRepo: typeof bag.bucketRepo === 'string' && bag.bucketRepo.includes('/') ? bag.bucketRepo : DEFAULT_BUCKET,
-    hubToken: typeof bag.hubToken === 'string' ? bag.hubToken : bag.poolToken ?? '',
+    hubToken: typeof bag.hubToken === 'string' ? bag.hubToken : '',
     poolPaused: bag.poolPaused === true,
     subs: parseSubs(bag.poolSubs) ?? DEFAULT_SUBS,
   };
@@ -103,8 +101,6 @@ export function setConfig(next, flushNowFlag = false) {
   if (Array.isArray(patch.subs) && patch.subs.length === 0) delete patch.subs;
   config = { ...config, ...patch };
   void storage().set({
-    poolUrl: config.poolUrl,
-    poolToken: config.poolToken,
     bucketRepo: config.bucketRepo,
     hubToken: config.hubToken,
     poolPaused: config.poolPaused,

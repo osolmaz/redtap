@@ -343,8 +343,8 @@ void (async () => {
 
 initControl({
   getConfig: async () => {
-    const bag = await chrome.storage.local.get(['bucketRepo', 'hubToken', 'poolUrl', 'poolToken']);
-    return { bucketRepo: bag.bucketRepo ?? 'osolmaz/redtap-data', hubToken: bag.hubToken ?? bag.poolToken ?? '', poolUrl: bag.poolUrl ?? '', poolToken: bag.poolToken ?? '' };
+    const bag = await chrome.storage.local.get(['bucketRepo', 'hubToken']);
+    return { bucketRepo: bag.bucketRepo ?? 'osolmaz/redtap-data', hubToken: bag.hubToken ?? '' };
   },
   heartbeat: async () => {
     const wall = await probeWall();
