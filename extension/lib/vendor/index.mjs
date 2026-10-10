@@ -4855,7 +4855,7 @@ async function fileDownloadInfo(params) {
   const repoId = toRepoId(params.repo);
   const hubUrl = params.hubUrl ?? HUB_URL;
   const revision = repoId.type === "bucket" ? void 0 : params.revision ?? "main";
-  const url = `${hubUrl}/${repoId.type === "model" ? "" : `${repoId.type}s/`}${repoId.name}/${params.raw ? "raw" : "resolve"}${revision ? `/${encodeURIComponent(revision)}` : ""}/${params.path}` + (params.noContentDisposition ? "?noContentDisposition=1" : "");
+  const url = `${hubUrl}/${repoId.type === "model" ? "" : `${repoId.type}s/`}${repoId.name}/${params.raw ? "raw" : "resolve"}${revision ? `/${encodeURIComponent(revision)}` : ""}/${params.path.split("/").map(encodeURIComponent).join("/")}` + (params.noContentDisposition ? "?noContentDisposition=1" : "");
   const resp = await (params.fetch ?? fetch)(url, {
     method: "GET",
     headers: {
@@ -4966,7 +4966,7 @@ async function* listFiles(params) {
   const accessToken = checkCredentials(params);
   const repoId = toRepoId(params.repo);
   const revision = repoId.type === "bucket" ? void 0 : params.revision || "main";
-  let url = `${params.hubUrl || HUB_URL}/api/${repoId.type}s/${repoId.name}/tree${revision ? `/${revision}` : ""}${params.path ? "/" + params.path : ""}?recursive=${!!params.recursive}&expand=${!!params.expand}`;
+  let url = `${params.hubUrl || HUB_URL}/api/${repoId.type}s/${repoId.name}/tree${revision ? `/${encodeURIComponent(revision)}` : ""}${params.path ? "/" + params.path.split("/").map(encodeURIComponent).join("/") : ""}?recursive=${!!params.recursive}&expand=${!!params.expand}`;
   while (url) {
     const res = await (params.fetch ?? fetch)(url, {
       headers: {
@@ -5326,7 +5326,9 @@ function throwUnmigratedLfsError(repoId, entries) {
 async function countCommits(params) {
   const accessToken = checkCredentials(params);
   const repoId = toRepoId(params.repo);
-  const url = `${params.hubUrl ?? HUB_URL}/api/${repoId.type}s/${repoId.name}/commits/${params.revision ?? "main"}?limit=1`;
+  const url = `${params.hubUrl ?? HUB_URL}/api/${repoId.type}s/${repoId.name}/commits/${encodeURIComponent(
+    params.revision ?? "main"
+  )}?limit=1`;
   const res = await (params.fetch ?? fetch)(url, {
     headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : {}
   });
@@ -5667,7 +5669,7 @@ async function fileExists(params) {
   const hubUrl = params.hubUrl ?? HUB_URL;
   const revision = repoId.type === "bucket" ? void 0 : params.revision ?? "main";
   const endpoint = repoId.type === "bucket" ? "resolve" : "raw";
-  const url = `${hubUrl}/${repoId.type === "model" ? "" : `${repoId.type}s/`}${repoId.name}/${endpoint}${revision ? `/${encodeURIComponent(revision)}` : ""}/${params.path}`;
+  const url = `${hubUrl}/${repoId.type === "model" ? "" : `${repoId.type}s/`}${repoId.name}/${endpoint}${revision ? `/${encodeURIComponent(revision)}` : ""}/${params.path.split("/").map(encodeURIComponent).join("/")}`;
   const resp = await (params.fetch ?? fetch)(url, {
     method: "HEAD",
     headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : {}
@@ -6156,7 +6158,9 @@ async function suspendScheduledJob(params) {
 async function* listCommits(params) {
   const accessToken = checkCredentials(params);
   const repoId = toRepoId(params.repo);
-  let url = `${params.hubUrl ?? HUB_URL}/api/${repoId.type}s/${repoId.name}/commits/${params.revision ?? "main"}?limit=${params.batchSize ?? 100}`;
+  let url = `${params.hubUrl ?? HUB_URL}/api/${repoId.type}s/${repoId.name}/commits/${encodeURIComponent(
+    params.revision ?? "main"
+  )}?limit=${params.batchSize ?? 100}`;
   while (url) {
     const res = await (params.fetch ?? fetch)(url, {
       headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : {}
@@ -7184,6 +7188,8 @@ function parseSafetensorsShardFilename(filename) {
   return null;
 }
 var PARALLEL_DOWNLOADS = 20;
+var PATHS_INFO_BATCH_SIZE2 = 1e3;
+var HEADER_SPECULATIVE_READ_LENGTH = 1e5;
 var MAX_HEADER_LENGTH = 25e6;
 var MAX_CONFIG_LENGTH = 1e7;
 var MAX_SHARD_COUNT = 1e4;
@@ -7302,12 +7308,14 @@ async function fetchModelConfig(params) {
   }
 }
 async function parseSingleFile(path, params) {
-  const blob = await downloadFile({ ...params, path });
+  return parseHeaderFromBlob(path, await downloadFile({ ...params, path }));
+}
+async function parseHeaderFromBlob(path, blob) {
   if (!blob) {
     throw new SafetensorParseError(`Failed to parse file ${path}: failed to fetch safetensors header length.`);
   }
-  const bufLengthOfHeaderLE = await blob.slice(0, 8).arrayBuffer();
-  const lengthOfHeader = new DataView(bufLengthOfHeaderLE).getBigUint64(0, true);
+  const prefix = new Uint8Array(await blob.slice(0, HEADER_SPECULATIVE_READ_LENGTH).arrayBuffer());
+  const lengthOfHeader = new DataView(prefix.buffer).getBigUint64(0, true);
   if (lengthOfHeader <= 0) {
     throw new SafetensorParseError(`Failed to parse file ${path}: safetensors header is malformed.`);
   }
@@ -7316,9 +7324,22 @@ async function parseSingleFile(path, params) {
       `Failed to parse file ${path}: safetensor header is too big. Maximum supported size is ${MAX_HEADER_LENGTH} bytes.`
     );
   }
+  const headerEnd = 8 + Number(lengthOfHeader);
+  let headerBytes = prefix.subarray(8, headerEnd);
+  if (headerEnd > prefix.byteLength) {
+    if (headerEnd > blob.size) {
+      throw new SafetensorParseError(`Failed to parse file ${path}: safetensors header is malformed.`);
+    }
+    headerBytes = new Uint8Array(headerEnd - 8);
+    headerBytes.set(prefix.subarray(8));
+    headerBytes.set(
+      new Uint8Array(await blob.slice(prefix.byteLength, headerEnd).arrayBuffer()),
+      prefix.byteLength - 8
+    );
+  }
   let header;
   try {
-    header = JSON.parse(await blob.slice(8, 8 + Number(lengthOfHeader)).text());
+    header = JSON.parse(new TextDecoder().decode(headerBytes));
   } catch (err) {
     throw new SafetensorParseError(`Failed to parse file ${path}: safetensors header is not valid JSON.`);
   }
@@ -7326,7 +7347,7 @@ async function parseSingleFile(path, params) {
   for (const [tensorName, info] of typedEntries(omit(header, "__metadata__"))) {
     validateTensorEntry(path, tensorName, info, fileSizeBytes);
   }
-  return { header, fileSizeBytes };
+  return header;
 }
 async function parseShardedIndex(path, params) {
   const indexBlob = await downloadFile({
@@ -7406,13 +7427,34 @@ async function fetchAllHeaders(path, filenames, params) {
   for (const filename of filenames) {
     assertSafeShardFilename(filename);
   }
+  if (!filenames.length) {
+    return {};
+  }
+  const paths = filenames.map((filename) => pathPrefix + filename);
+  const firstBlob = await downloadFile({ ...params, path: paths[0] });
+  const firstXetBlob = firstBlob instanceof XetBlob ? firstBlob : void 0;
+  const otherInfos = firstXetBlob ? await Promise.all(
+    chunk(paths.slice(1), PATHS_INFO_BATCH_SIZE2).map(
+      (batch) => pathsInfo({ ...params, paths: batch }).catch(() => [])
+    )
+  ) : [];
+  const infoByPath = new Map(otherInfos.flat().map((info) => [info.path, info]));
   const shardedMap = Object.fromEntries(
-    (await promisesQueue(
-      filenames.map(
-        (filename) => async () => [filename, await parseSingleFile(pathPrefix + encodeShardFilename(filename), params)]
-      ),
+    await promisesQueue(
+      filenames.map((filename, i) => async () => {
+        const path2 = paths[i];
+        const info = infoByPath.get(path2);
+        const blob = i === 0 ? firstBlob : firstXetBlob && info?.xetHash ? new XetBlob({
+          fetch: firstXetBlob.fetch,
+          refreshUrl: firstXetBlob.refreshUrl,
+          accessToken: firstXetBlob.accessToken,
+          hash: info.xetHash,
+          size: info.size
+        }) : await downloadFile({ ...params, path: path2 });
+        return [filename, await parseHeaderFromBlob(path2, blob)];
+      }),
       PARALLEL_DOWNLOADS
-    )).map(([filename, { header }]) => [filename, header])
+    )
   );
   return shardedMap;
 }
@@ -7474,7 +7516,7 @@ async function parseSafetensorsMetadata(params) {
     }
   }
   if (location && !location.sharded) {
-    const { header } = await parseSingleFile(location.path, params);
+    const header = await parseSingleFile(location.path, params);
     const paramStats = params.computeParametersCount ? (() => {
       const parameterCount = computeNumOfParamsByDtypeSingleFile(header, quantConfig, expertDtype);
       return {

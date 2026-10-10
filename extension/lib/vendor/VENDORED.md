@@ -1,6 +1,6 @@
 # Vendored: @huggingface/hub
 
-- Source: `@huggingface/hub@2.17.5` `dist/browser/*` (index.mjs + chunk files)
+- Source: `@huggingface/hub@2.17.6` `dist/browser/*` (index.mjs + chunk files)
   plus `@huggingface/xetchunk-wasm` `dist/esm/*` (as `xetchunk/`),
   `gearhash-jit` `dist/esm/*` (as `gearhash/`), and
   `@huggingface/blake3-jit` `dist/esm/*` (as `blake3/`).

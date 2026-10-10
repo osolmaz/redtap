@@ -1,14 +1,14 @@
-// redtap pool sync — direct bucket writes, no Space.
+// redtap pool sync — local ingest, no Space.
 //
 // Captured observations append to a persistent outbox in
 // chrome.storage.local. Once per seal cycle (2h) the outbox is converted to
-// v2 lines (bodies once per hash, tiny sight lines), gzipped, and committed
-// to the HF bucket at an immutable path. The cycle's path+uuid persist until
-// a commit succeeds, so retries are idempotent. On 429 the upload honors
-// Retry-After with exponential backoff; on 401/403 the writer stops (red
-// badge) and keeps buffering for up to 30 days.
+// v2 lines (bodies once per hash, tiny sight lines) and POSTed to the local
+// redtap server's /ingest endpoint, which performs the bucket write from
+// node. The cycle's path+uuid persist until a commit succeeds, so retries
+// are idempotent. On 429 the seal honors Retry-After with exponential
+// backoff; on 401/403 the writer stops (red badge) and keeps buffering for
+// up to 30 days.
 
-import { uploadFile } from './vendor/index.mjs';
 import { bodyHash, EMPTY_BODY_HASH, hashesOf, toV2Lines } from './v2log.js';
 
 const OUTBOX_KEY = 'poolOutbox';
@@ -24,6 +24,7 @@ export const CONFIG_KEYS = ['poolUrl', 'poolToken', 'poolPaused', 'poolSubs', 'p
 export const DEFAULT_SUBS = ['LocalLLaMA'];
 export const DEFAULT_BUCKET = 'osolmaz/redtap-data';
 const SEAL_ALARM = 'redtap-pool-seal';
+const INGEST_FOLDER = 'redtap-outbox';
 
 let outbox = [];
 let knownHashes = new Set();
@@ -115,8 +116,15 @@ export function setConfig(next, flushNowFlag = false) {
 
 /** Seal the outbox as one v2 segment and commit it. force seals early (tests). */
 export async function sealNow(force = false) {
-  if (sealing || config.poolPaused || !isConfigured()) return 0;
-  if (outbox.length === 0 && !force) return 0;
+  const trace = (event, detail) => {
+    try { console.log('[redtap-seal]', event, JSON.stringify(detail ?? {})); } catch {}
+    try { logFn?.({ event: 'seal-' + event, ...detail }); } catch {}
+  };
+  // declared before the try so early throws can still be tagged in the catch
+  let whoamiProbe = null;
+  if (sealing || config.poolPaused || !isConfigured()) { trace('skip', { sealing, paused: config.poolPaused, configured: isConfigured() }); return 0; }
+  if (outbox.length === 0 && !force) { trace('skip-empty'); return 0; }
+  trace('start', { queued: outbox.length, force });
   sealing = true;
   try {
     // drop stale lines past retention
@@ -125,7 +133,8 @@ export async function sealNow(force = false) {
 
     const records = outbox.map(({ _admittedAt, ...record }) => record);
     let lines = await toV2Lines(records, knownHashes, digest);
-    if (lines.length === 0) { outbox = []; await storage().set({ [OUTBOX_KEY]: outbox }); return 0; }
+    if (lines.length === 0) { trace('deduped-to-zero'); outbox = []; await storage().set({ [OUTBOX_KEY]: outbox }); return 0; }
+    trace('lines', { count: lines.length });
     // A record contributes one sight line plus a body line when its selftext is
     // new to the committed hashes. Seal the longest prefix that fits the commit
     // line cap; the outbox keeps the rest for the next cycle so the queue always
@@ -159,17 +168,25 @@ export async function sealNow(force = false) {
       await persistCycle();
     }
 
+    // Drop the sealed segment into ~/Downloads/redtap-outbox/ via the
+    // downloads API. The local redtap server watches that folder and performs
+    // the bucket write from node — the service worker's own fetches wedge on
+    // the loopback POST, so no network fetch is used here.
+    const finalPath = cycle.path;
+    trace('uploading', { path: finalPath, lines: lines.length });
     const text = lines.map((l) => JSON.stringify(l)).join('\n') + '\n';
-    const gz = await gzipBytes(new TextEncoder().encode(text));
-    const content = gz ? new Blob([gz]) : new Blob([text]);
-    const finalPath = gz ? cycle.path : cycle.path.replace(/\.gz$/, '.jsonl');
-
-    await uploadFile({
-      repo: { type: 'bucket', name: config.bucketRepo },
-      accessToken: config.hubToken,
-      file: { path: finalPath, content },
-      commitTitle: 'redtap: seal ' + lines.length + ' v2 lines (' + sealedCount + ' records)',
+    const gzBytes = await gzipBytes(new TextEncoder().encode(text));
+    if (!gzBytes) throw new Error('gzip unavailable in worker');
+    let binary = '';
+    for (let i = 0; i < gzBytes.length; i += 0x8000) {
+      binary += String.fromCharCode(...gzBytes.subarray(i, i + 0x8000));
+    }
+    const downloadId = await chrome.downloads.download({
+      url: 'data:application/gzip;base64,' + btoa(binary),
+      filename: 'redtap-outbox/' + finalPath,
+      conflictAction: 'overwrite',
     });
+    trace('handed-off', { downloadId });
 
     // success: commit the body hashes, drop the sealed records, clear the cycle
     for (const h of hashesOf(lines)) knownHashes.add(h);
@@ -186,7 +203,7 @@ export async function sealNow(force = false) {
     return records.length;
   } catch (error) {
     const message = String(error?.message ?? error);
-    stats.lastError = message.slice(0, 200);
+    stats.lastError = (whoamiProbe ? '[' + whoamiProbe + '] ' : '') + message.slice(0, 200);
     if (/status (401|403)/.test(message) || /401|403/.test(message)) {
       stats.lastError = 'auth failed (' + (message.match(/40[13]/)?.[0] ?? '40x') + '): fix the HF token; captures keep buffering';
       backoffMs = BACKOFF_MAX_MS;
@@ -218,8 +235,16 @@ export async function flushNowNow() {
   return before - outbox.length;
 }
 
-export async function initPoolSync() {
+// optional structured logger (wired from background.js's swLog)
+let logFn = null;
+
+export async function initPoolSync({ log } = {}) {
+  logFn = log ?? null;
+  try { console.log('[redtap-seal] init-enter'); } catch {}
+  try { logFn?.({ event: 'seal-init-enter' }); } catch {}
   await loadState();
+  try { console.log('[redtap-seal] init-state', JSON.stringify({ queued: outbox.length, cycle: cycle?.path ?? null, tokenLen: String(config.hubToken).length })); } catch {}
+  try { logFn?.({ event: 'seal-init-state', queued: outbox.length, cycle: cycle?.path ?? null, tokenLen: String(config.hubToken).length, bucket: config.bucketRepo }); } catch {}
   // alarms.create replaces an existing alarm of the same name, and the 1-minute
   // control poll wakes this worker constantly — recreating the seal alarm on
   // every wake would push its deadline out forever and seals would never run.
@@ -232,6 +257,10 @@ export async function initPoolSync() {
       void sealNow();
     }
   });
-  // a failed commit retries on the worker's next wake; the alarm minimum is 30s
-  if (cycle) scheduleSeal(backoffMs || 40_000);
+  // MV3 suspends the worker ~30s after its last event, which kills any
+  // setTimeout-based retry before it fires. Run a pending seal inline instead:
+  // every wake (the 1-minute control poll, captures, alarms) retries it, and
+  // re-uploading the same cycle path is idempotent.
+  try { logFn?.({ event: 'seal-init-dispatch', hasCycle: !!cycle }); } catch {}
+  if (cycle) void sealNow();
 }

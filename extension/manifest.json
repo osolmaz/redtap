@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "redtap",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Passively captures Reddit posts as you browse and saves them locally as JSONL",
   "permissions": [
     "alarms",
@@ -16,7 +16,9 @@
     "https://cas-bridge.xethub.hf.co/*",
     "https://cas-server.xethub.hf.co/*",
     "https://huggingface.co/*",
-    "https://transfer.xethub.hf.co/*"
+    "https://transfer.xethub.hf.co/*",
+    "http://127.0.0.1/*",
+    "http://localhost/*"
   ],
   "options_ui": {
     "page": "options.html",

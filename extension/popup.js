@@ -8,13 +8,14 @@ const exportStatusEl = document.getElementById('export-status');
 const poolStatusEl = document.getElementById('pool-status');
 const syncNowEl = document.getElementById('pool-sync-now');
 
-function renderCounts(lines) {
-  const records = lines ?? [];
-  observationsEl.textContent = String(records.length);
-  const posts = new Set(records.map((line) => line.post_id));
-  uniqueEl.textContent = String(posts.size);
-  const subs = new Set(records.map((line) => line.subreddit).filter(Boolean));
-  subredditsEl.textContent = String(subs.size);
+// Counts come from the pool sync state; the local archive is gone (the
+// bucket's v2 log is the archive).
+function renderCounts() {
+  chrome.runtime.sendMessage({ type: 'redtap:pool-status' }, (status) => {
+    observationsEl.textContent = String(status?.synced ?? 0);
+    uniqueEl.textContent = '—';
+    subredditsEl.textContent = String(status?.subs?.length ?? 0);
+  });
 }
 
 async function renderCurrentTab() {
@@ -54,10 +55,7 @@ function renderPool(status) {
   }
 }
 
-chrome.storage.local.get('redtapLines').then((bag) => renderCounts(bag.redtapLines ?? []));
-chrome.storage.onChanged.addListener((changes, area) => {
-  if (area === 'local' && changes.redtapLines) renderCounts(changes.redtapLines.newValue ?? []);
-});
+renderCounts();
 chrome.runtime.sendMessage({ type: 'redtap:pool-status' }, (status) => renderPool(status ?? {}));
 renderCurrentTab();
 
@@ -75,8 +73,7 @@ exportAllEl.addEventListener('click', async () => {
   try {
     const response = await chrome.runtime.sendMessage({ type: 'redtap:export', uniqueOnly: false });
     exportStatusEl.style.display = 'block';
-    exportStatusEl.textContent =
-      response?.exported != null ? 'Exported ' + response.exported + ' observations' : 'Export failed';
+    exportStatusEl.textContent = 'Exports removed — the bucket serves the data';
     exportStatusEl.className = 'status connected';
   } finally {
     exportAllEl.disabled = false;
@@ -86,10 +83,8 @@ exportAllEl.addEventListener('click', async () => {
 exportBtn.addEventListener('click', async () => {
   exportBtn.disabled = true;
   try {
-    const response = await chrome.runtime.sendMessage({ type: 'redtap:export' });
     exportStatusEl.style.display = 'block';
-    exportStatusEl.textContent =
-      response?.exported != null ? 'Exported ' + response.exported + ' unique posts' : 'Export failed';
+    exportStatusEl.textContent = 'Exports removed — the bucket serves the data';
     exportStatusEl.className = 'status connected';
   } finally {
     exportBtn.disabled = false;

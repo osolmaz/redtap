@@ -1,5 +1,6 @@
 // redtap service worker: local capture store, unique-post export, and the
 // Infinite Feed Scroller scrape bridge (xtap-scrape-v1 protocol).
+console.log('[redtap-bg] fresh module load, manifest 0.2.0, ingest build');
 import { canonical, observationId, postKey, postsFromApiPayload, recordFromApiPost, shouldSampleUnchanged } from './lib/observations.js';
 import { admitRecords, flushNowNow, initPoolSync, setConfig, statusSnapshot } from './lib/pool-sync.js';
 import { NetworkCapture } from './lib/network-capture.js';
@@ -36,9 +37,8 @@ async function recordObservation(record) {
   if (prior && prior.observation_id === observation.observation_id) {
     if (!shouldSampleUnchanged(prior.lastSeenAtMs, Date.now())) return null;
   }
-  const lines = (await store.get('redtapLines', []));
-  lines.push(observation);
-  await store.set('redtapLines', lines);
+  // No local archive: the bucket's v2 log is the archive. Writing a growing
+  // array here re-serialized megabytes per capture and wedged the worker.
   samples[observation.post_id] = {
     observation_id: observation.observation_id,
     lastSeenAtMs: Date.now(),
@@ -47,31 +47,9 @@ async function recordObservation(record) {
   return observation;
 }
 
-async function exportAllJsonl() {
-  const lines = await store.get('redtapLines', []);
-  const payload = lines.map((line) => JSON.stringify(line)).join('\n') + '\n';
-  const url = URL.createObjectURL(new Blob([payload], { type: 'application/x-ndjson' }));
-  const stamp = new Date().toISOString().replace(/[:.]/g, '-');
-  await chrome.downloads.download({ url, filename: `redtap/redtap-observations-${stamp}.jsonl` });
-  return lines.length;
-}
+// Local JSONL exports removed: the bucket's v2 log supersedes them.
 
-async function exportJsonl() {
-  const lines = await store.get('redtapLines', []);
-  const seen = new Set();
-  const unique = [];
-  for (const line of lines) {
-    const key = postKey(line);
-    if (!key || seen.has(key)) continue;
-    seen.add(key);
-    unique.push(line);
-  }
-  const payload = unique.map((line) => JSON.stringify(line)).join('\n') + '\n';
-  const url = URL.createObjectURL(new Blob([payload], { type: 'application/x-ndjson' }));
-  const stamp = new Date().toISOString().replace(/[:.]/g, '-');
-  await chrome.downloads.download({ url, filename: `redtap/redtap-${stamp}.jsonl` });
-  return unique.length;
-}
+// (see above)
 
 // ------------------------------------------------------- scrape bridge (IFS)
 
@@ -353,28 +331,14 @@ async function swLog(entry) {
 void (async () => {
   await swLog({ event: 'sw-start' });
   try {
-    await initPoolSync();
+    await initPoolSync({ log: swLog });
     await swLog({ event: 'pool-sync-init-ok' });
   } catch (error) {
     await swLog({ event: 'pool-sync-init-failed', error: String(error?.message ?? error).slice(0, 150) });
   }
-  try {
-    const lines = await store.get('redtapLines', []);
-    const latest = new Map();
-    for (const line of lines) {
-      if (!line?.post_id) continue;
-      latest.set(line.post_id, line);
-    }
-    // Bodyless posts, plus long bodies captured before the newline fix:
-    // a flattened single-paragraph body longer than a paragraph is worth
-    // re-fetching once so markdown structure repairs itself.
-    const needsBody = (record) => !record.selftext || (record.selftext.length > 400 && !record.selftext.includes('\n'));
-    const bodyless = [...latest.values()]
-      .filter((record) => needsBody(record) && record.permalink)
-      .map((record) => ({ post_id: record.post_id, permalink: record.permalink }));
-    enqueueBodyFetch(bodyless);
-    await swLog({ event: 'boot-body-enrich', count: bodyless.length });
-  } catch {}
+  // No boot-time body backfill from a local archive: the archive is gone and
+  // the bucket owns committed history. Fresh captures enrich as they arrive.
+  await swLog({ event: 'boot-ready' });
 })();
 
 initControl({
@@ -384,14 +348,14 @@ initControl({
   },
   heartbeat: async () => {
     const wall = await probeWall();
-    const [logBag, lines, bridgeLogTail] = await Promise.all([
+    const [logBag, bridgeLogTail] = await Promise.all([
       chrome.storage.local.get('swLog'),
-      store.get('redtapLines', []),
       store.get('bridgeLog', []),
     ]);
+    const snapshot = statusSnapshot();
     return {
-      lines: lines.length,
-      selftextLines: lines.filter((line) => line.selftext).length,
+      lines: snapshot.queued,
+      selftextLines: snapshot.synced,
       swLog: (logBag.swLog ?? []).slice(-8),
       bridgeLog: (bridgeLogTail ?? []).slice(-10),
       bodyQueue: bodyQueue.length,
@@ -696,8 +660,16 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return;
   }
   if (message?.type === 'redtap:pool-status') {
-    sendResponse({ ...statusSnapshot(), listing: { ...listingState } });
-    return;
+    void chrome.storage.local.get('swLog').then((bag) => {
+      sendResponse({
+        ...statusSnapshot(),
+        listing: { ...listingState },
+        captureMessages,
+        capturesStored,
+        swLog: (bag.swLog ?? []).slice(-6),
+      });
+    });
+    return true;
   }
   if (message?.type === 'redtap:listing-backfill-now') {
     void runListingBackfill().then(() => sendResponse({ ok: true, listing: { ...listingState } }));
@@ -708,11 +680,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return true;
   }
   if (message?.type !== 'redtap:export') return;
-  const uniqueOnly = message.uniqueOnly !== false;
-  if (uniqueOnly) {
-    exportJsonl().then((count) => sendResponse({ exported: count }));
-  } else {
-    exportAllJsonl().then((count) => sendResponse({ exported: count }));
-  }
+  // Local exports are gone; the bucket's v2 log is the data path.
+  sendResponse({ exported: 0 });
   return true;
 });

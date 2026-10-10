@@ -4,8 +4,16 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
 import { join, dirname } from 'node:path';
+import { writeFileSync, readFileSync, mkdtempSync, mkdirSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { gzipSync, gunzipSync } from 'node:zlib';
+import { randomUUID, createHash } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
-import { makeBucketMirror, POST_DAY } from './helpers/v2-fixture.mjs';
+import { toV2Lines } from '../extension/lib/v2log.js';
+import { makeBucketMirror, fixtureRecords, POST_DAY } from './helpers/v2-fixture.mjs';
+
+const digest = (bytes) => createHash('sha256').update(bytes).digest('hex');
+const mkdtemp = () => mkdtempSync(join(tmpdir(), 'redtap-test-'));
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -96,6 +104,37 @@ test('the server applies a base prefix when asked', async () => {
     assert.equal(home.status, 200);
     assert.ok(home.body.includes('href="/redtap/'));
     assert.ok(!home.body.includes('href="/hot/'));
+  } finally {
+    child.kill('SIGTERM');
+  }
+});
+
+test('the server ingests a sealed v2 segment and shows it on the feed', async () => {
+  const watchDir = join(await mkdtemp(), 'redtap-outbox');
+  const now = new Date();
+  mkdirSync(join(watchDir, 'v2', 'log', ...now.toISOString().slice(0, 10).split('-')), { recursive: true });
+  const { child, mirror, url } = await startServe(['--watch-dir', watchDir]);
+  try {
+    const record = { ...fixtureRecords()[0], observation_id: 'obs-ingest', post_id: 't3_fixingest', title: 'Ingested fixture post', captured_at: Date.now(), metrics: { score: 7, comments: 1, upvote_ratio: 0.8 } };
+    const lines = await toV2Lines([record], new Set(), digest);
+    const stamp = String(now.getTime()).padStart(13, '0');
+    const segPath = `v2/log/${now.toISOString().slice(0, 10).replace(/-/g, '/')}/${stamp}-${randomUUID()}.jsonl.gz`;
+    const text = lines.map((l) => JSON.stringify(l)).join('\n') + '\n';
+    writeFileSync(join(watchDir, segPath), gzipSync(Buffer.from(text, 'utf-8')));
+
+    // the watcher ingests the segment into the local mirror, gzipped as-is
+    let gunzip = null;
+    for (let i = 0; i < 20 && !gunzip; i++) {
+      await new Promise((r) => setTimeout(r, 500));
+      try { gunzip = gunzipSync(readFileSync(join(mirror, segPath))); } catch {}
+    }
+    assert.ok(gunzip, 'segment was not ingested into the mirror');
+    assert.ok(gunzip.toString().includes('t3_fixingest'));
+
+    // the ingest triggers a data refresh: the front page shows the new post
+    await new Promise((r) => setTimeout(r, 1500));
+    const home = await get(url, '/');
+    assert.ok(home.body.includes('Ingested fixture post'));
   } finally {
     child.kill('SIGTERM');
   }

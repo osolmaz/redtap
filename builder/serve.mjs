@@ -10,12 +10,14 @@
 // in that order, and is never logged. Restart the server to reload data.
 
 import { createServer } from 'node:http';
-import { readFileSync, existsSync } from 'node:fs';
-import { extname, join, normalize } from 'node:path';
+import { readFileSync, existsSync, mkdirSync, writeFileSync, readdirSync, rmSync, watch } from 'node:fs';
+import { extname, join, normalize, dirname as pathDirname } from 'node:path';
 import { homedir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 import { dirname } from 'node:path';
+import { gunzipSync, gzipSync } from 'node:zlib';
 import { DEFAULT_BUCKET, renderRoute, siteState, withBase } from './site-lib.mjs';
+import { uploadFile } from '@huggingface/hub';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const arg = (name, fallback) => {
@@ -50,6 +52,65 @@ const HOST = arg('host', '0.0.0.0');
 const PORT = Number(arg('port', '8088'));
 const BASE = arg('base', '');
 
+// Capture ingest: the extension hands sealed v2 segments to the downloads
+// folder via chrome.downloads; the server watches it and performs the bucket
+// write from node, where the hub client is proven.
+const WATCH_ROOT = arg('watch-dir', undefined) ?? join(homedir(), 'Downloads', 'redtap-outbox');
+const SEGMENT_PATH = /^v2\/log\/\d{4}\/\d{2}\/\d{2}\/\d{13}-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.jsonl\.gz$/;
+const inFlight = new Set();
+
+async function ingestFile(absPath, relPath) {
+  if (inFlight.has(relPath)) return;
+  inFlight.add(relPath);
+  try {
+    const gz = readFileSync(absPath);
+    const text = gunzipSync(gz).toString('utf-8');
+    const lines = text.trim().split('\n').filter(Boolean).map((l) => JSON.parse(l));
+    if (backend === 'local') {
+      const file = join(dir, relPath);
+      mkdirSync(pathDirname(file), { recursive: true });
+      writeFileSync(file, gz);
+    } else {
+      await uploadFile({
+        repo: { type: 'bucket', name: source.repo },
+        accessToken: source.token,
+        file: { path: relPath, content: new Blob([gz]) },
+        commitTitle: `redtap: ingest ${lines.length} v2 lines`,
+      });
+    }
+    console.error(`ingested ${relPath} (${lines.length} lines)`);
+    rmSync(absPath);
+    refreshState();
+  } catch (error) {
+    if (String(error?.message ?? '').includes('409')) {
+      console.error(`ingest ${relPath}: already committed, dropping`);
+      rmSync(absPath);
+      return;
+    }
+    console.error(`ingest ${relPath} failed, will retry on next event: ${String(error?.message ?? error).slice(0, 140)}`);
+  } finally {
+    inFlight.delete(relPath);
+  }
+}
+
+function startIngestWatcher() {
+  mkdirSync(WATCH_ROOT, { recursive: true });
+  const scan = () => {
+    let found = [];
+    try { found = readdirSync(join(WATCH_ROOT, 'v2', 'log'), { recursive: true }); } catch { return; }
+    for (const rel of found) {
+      if (!SEGMENT_PATH.test('v2/log/' + rel.replaceAll('\\', '/'))) continue;
+      ingestFile(join(WATCH_ROOT, 'v2', 'log', rel), 'v2/log/' + rel.replaceAll('\\', '/'));
+    }
+  };
+  scan();
+  try { watch(WATCH_ROOT, { recursive: true }, () => setTimeout(scan, 1500)).unref(); } catch (e) {
+    console.error(`watching ${WATCH_ROOT} failed: ${e?.message ?? e}`);
+  }
+  setInterval(scan, 60_000).unref();
+  console.error(`watching ${WATCH_ROOT} for sealed segments`);
+}
+
 console.error(`loading data from the ${backend} backend…`);
 let state = await siteState(source, { base: BASE });
 console.error(`${state.summaries.length} posts ready`);
@@ -66,6 +127,7 @@ async function refreshState() {
   }
 }
 setInterval(refreshState, REFRESH_MS).unref();
+startIngestWatcher();
 
 const STATIC_ROOT = join(here, '..', 'space', 'static');
 const TYPES = {
