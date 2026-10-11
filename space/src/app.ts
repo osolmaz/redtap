@@ -4,15 +4,15 @@
 // schema validation, dedupe by observation id, append to the immutable
 // private Bucket log. Single-pool edition: the pool token is the Space's
 // POOL_TOKEN secret, saved once in the extension's options.
-import { Hono } from "hono";
-import { serveStatic } from "@hono/node-server/serve-static";
-import { readFileSync } from "node:fs";
-import { z } from "zod";
+import { Hono, type Context } from 'hono';
+import { serveStatic } from '@hono/node-server/serve-static';
+import { readFileSync } from 'node:fs';
+import { z } from 'zod';
 
-import { renderBrowsePage, renderPostPage } from "./browse.ts";
-import { renderRss } from "./rss.ts";
-import { openBucketLog, type BucketLog } from "./bucket-log.ts";
-import { RecordStore } from "./record-store.ts";
+import type { BucketLog } from './bucket-log.ts';
+import { renderBrowsePage, renderPostPage } from './browse.ts';
+import { renderRss } from './rss.ts';
+import { RecordStore } from './record-store.ts';
 
 export const recordSchema = z
   .object({
@@ -57,13 +57,13 @@ export function createApp(config: Config, log: BucketLog, store?: RecordStore) {
   const recordStore = store ?? new RecordStore();
 
   // The pool serves one configured subreddit focus (default r/LocalLLaMA).
-  const poolSubreddits = (config.poolSubreddits ?? "LocalLLaMA")
-    .split(",")
-    .map((s) => s.trim().replace(/^r\//i, "").toLowerCase())
+  const poolSubreddits = (config.poolSubreddits ?? 'LocalLLaMA')
+    .split(',')
+    .map((s) => s.trim().replace(/^r\//i, '').toLowerCase())
     .filter(Boolean);
   const inPool = (p: { subreddit: string | null }): boolean => {
-    if (p.subreddit === null || p.subreddit === "") return false;
-    const bare = p.subreddit.replace(/^r\//i, "").toLowerCase();
+    if (p.subreddit === null || p.subreddit === '') return false;
+    const bare = p.subreddit.replace(/^r\//i, '').toLowerCase();
     return poolSubreddits.includes(bare);
   };
   const visiblePosts = () => recordStore.posts().filter(inPool);
@@ -75,61 +75,59 @@ export function createApp(config: Config, log: BucketLog, store?: RecordStore) {
     seenLoaded = true;
   };
 
-  const authorized = (header: string | undefined): boolean =>
-    header === `Bearer ${config.poolToken}`;
+  const authorized = (header: string | undefined): boolean => header === `Bearer ${config.poolToken}`;
 
-  const favicon = readFileSync(new URL("../static/icon48.png", import.meta.url));
-  app.get("/favicon.ico", (c) => c.body(new Uint8Array(favicon), 200, { "content-type": "image/png" }));
-  app.use("/static/*", serveStatic({ root: "./" }));
+  const favicon = readFileSync(new URL('../static/icon48.png', import.meta.url));
+  app.get('/favicon.ico', (c) => c.body(new Uint8Array(favicon), 200, { 'content-type': 'image/png' }));
+  app.use('/static/*', serveStatic({ root: './' }));
 
-  app.get("/rss.xml", async (c) => {
+  app.get('/rss.xml', async (c) => {
     await recordStore.ensureLoaded(config.hubToken);
-    const origin = c.req.url.slice(0, c.req.url.indexOf("/", 8)).replace(/^http:/, "https:");
+    const origin = c.req.url.slice(0, c.req.url.indexOf('/', 8)).replace(/^http:/, 'https:');
     return c.body(renderRss(visiblePosts(), origin), 200, {
-      "content-type": "application/rss+xml; charset=utf-8",
+      'content-type': 'application/rss+xml; charset=utf-8',
     });
   });
 
-
-  app.get("/api/posts", async (c) => {
+  app.get('/api/posts', async (c) => {
     await recordStore.ensureLoaded(config.hubToken);
     return c.json({ posts: visiblePosts() });
   });
 
-  app.get("/api/status", async (c) => {
+  app.get('/api/status', async (c) => {
     await ensureSeen();
     return c.json({ seen: seen.size, segments: await log.totalRecords() });
   });
 
-  const telemetry: Array<Record<string, unknown>> = [];
-  app.post("/api/telemetry", async (c) => {
-    if (!authorized(c.req.header("authorization"))) {
-      return c.json({ error: "invalid or missing pool token" }, 401);
+  const telemetry: Record<string, unknown>[] = [];
+  app.post('/api/telemetry', async (c) => {
+    if (!authorized(c.req.header('authorization'))) {
+      return c.json({ error: 'invalid or missing pool token' }, 401);
     }
     let payload: unknown;
     try {
       payload = await c.req.json();
     } catch {
-      return c.json({ error: "body must be JSON" }, 400);
+      return c.json({ error: 'body must be JSON' }, 400);
     }
-    if (payload && typeof payload === "object") {
+    if (payload && typeof payload === 'object') {
       telemetry.push(payload as Record<string, unknown>);
       if (telemetry.length > 30) telemetry.shift();
     }
     return c.json({ ok: true });
   });
 
-  app.get("/api/telemetry", async (c) => {
-    if (!authorized(c.req.header("authorization"))) {
-      return c.json({ error: "invalid or missing pool token" }, 401);
+  app.get('/api/telemetry', (c) => {
+    if (!authorized(c.req.header('authorization'))) {
+      return c.json({ error: 'invalid or missing pool token' }, 401);
     }
     return c.json({ heartbeats: telemetry });
   });
 
   let controlCache: { at: number; doc: Record<string, unknown> | null } = { at: 0, doc: null };
-  app.get("/api/control", async (c) => {
-    if (!authorized(c.req.header("authorization"))) {
-      return c.json({ error: "invalid or missing pool token" }, 401);
+  app.get('/api/control', async (c) => {
+    if (!authorized(c.req.header('authorization'))) {
+      return c.json({ error: 'invalid or missing pool token' }, 401);
     }
     if (Date.now() - controlCache.at > 30_000) {
       controlCache = { at: Date.now(), doc: await log.readControl() };
@@ -138,73 +136,94 @@ export function createApp(config: Config, log: BucketLog, store?: RecordStore) {
   });
 
   // Standalone post pages, reddit-path style: /r/{sub}/comments/{id}/.
-  const renderPost = async (c: { req: { param: (k: string) => string } }, rawId: string) => {
+  const renderPost = async (c: Context, rawId: string) => {
     await recordStore.ensureLoaded(config.hubToken);
-    const bare = rawId.replace(/^t3_/, "");
-    const found = recordStore.postById("t3_" + bare);
-    if (found === null) return c.text("post not in pool", 404);
+    const bare = rawId.replace(/^t3_/, '');
+    const found = recordStore.postById('t3_' + bare);
+    if (found === null) return c.text('post not in pool', 404);
     return c.html(renderPostPage(found.summary, found.sightings, Date.now()));
   };
-  app.get("/r/:sub/comments/:id", (c) => renderPost(c, c.req.param("id")));
-  app.get("/r/:sub/comments/:id/", (c) => renderPost(c, c.req.param("id")));
-  app.get("/comments/:id", (c) => renderPost(c, c.req.param("id")));
-  app.get("/comments/:id/", (c) => renderPost(c, c.req.param("id")));
+  app.get('/r/:sub/comments/:id', (c) => renderPost(c, c.req.param('id')));
+  app.get('/r/:sub/comments/:id/', (c) => renderPost(c, c.req.param('id')));
+  app.get('/comments/:id', (c) => renderPost(c, c.req.param('id')));
+  app.get('/comments/:id/', (c) => renderPost(c, c.req.param('id')));
 
   // Reddit-style browse paths: /r/{sub}/{sort}/{range}/ with word ranges
   // (hour..all) or a custom date pair in the path: /r/{sub}/hot/2026-10-01/2026-10-03/.
   // Root shortcuts work too: /new, /top/week. Query params still fill gaps
   // (the date form GETs ?from=&to= onto the scope path).
-  const SORT_KEYS = ["hot", "new", "top", "rising"];
-  const RANGE_KEYS = ["hour", "day", "week", "month", "year", "all"];
+  const SORT_KEYS = ['hot', 'new', 'top', 'rising'];
+  const RANGE_KEYS = ['hour', 'day', 'week', 'month', 'year', 'all'];
   const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
-  app.get("*", async (c) => {
-    await recordStore.ensureLoaded(config.hubToken);
-    const seg = c.req.path.split("/").filter(Boolean);
-    let subreddit = "";
+  /** Scope keywords carried by a /r/{sub}/… path (sort/range/date segments). */
+
+  type PathScope = {
+    subreddit: string;
+    sort?: string;
+    range?: string;
+    dates: string[];
+  };
+
+  // eslint-disable-next-line complexity -- small path-segment state machine
+  function parsePathScope(path: string): PathScope {
+    const seg = path.split('/').filter(Boolean);
+    let subreddit = '';
+    if (seg[0] === 'r' && seg[1] !== undefined) {
+      subreddit = `r/${seg[1]}`;
+      seg.splice(0, 2);
+    }
     let sort: string | undefined;
     let range: string | undefined;
     const dates: string[] = [];
-    if (seg[0] === "r" && seg[1]) {
-      subreddit = "r/" + seg[1];
-      seg.splice(0, 2);
-    }
     for (const s of seg) {
-      if (!sort && SORT_KEYS.includes(s)) sort = s;
-      else if (!range && dates.length === 0 && RANGE_KEYS.includes(s)) range = s;
+      if (sort === undefined && SORT_KEYS.includes(s)) sort = s;
+      else if (range === undefined && dates.length === 0 && RANGE_KEYS.includes(s)) range = s;
       else if (dates.length < 2 && DATE_RE.test(s)) dates.push(s);
     }
     // A single date segment is a Hacker-News-style day page: that day only.
-    if (dates.length === 1) dates.push(dates[0]);
-    return c.html(
-      renderBrowsePage(visiblePosts(), {
-        subreddit: c.req.query("subreddit") ?? subreddit,
-        sort: c.req.query("sort") ?? sort,
-        range: dates.length > 0 ? undefined : (c.req.query("range") ?? range),
-        from: c.req.query("from") ?? dates[0],
-        to: c.req.query("to") ?? dates[1],
-      }, Date.now()),
-    );
-  });
+    if (dates.length === 1 && dates[0] !== undefined) dates.push(dates[0]);
+    return { subreddit, sort, range, dates };
+  }
 
-  app.post("/api/ingest", async (c) => {
-    if (!authorized(c.req.header("authorization"))) {
-      return c.json({ error: "invalid or missing pool token" }, 401);
+  async function catchAllBrowse(c: Context) {
+    await recordStore.ensureLoaded(config.hubToken);
+    const scope = parsePathScope(c.req.path);
+    return c.html(
+      renderBrowsePage(
+        visiblePosts(),
+        {
+          subreddit: c.req.query('subreddit') ?? scope.subreddit,
+          sort: c.req.query('sort') ?? scope.sort,
+          range: scope.dates.length > 0 ? undefined : (c.req.query('range') ?? scope.range),
+          from: c.req.query('from') ?? scope.dates[0],
+          to: c.req.query('to') ?? scope.dates[1],
+        },
+        Date.now(),
+      ),
+    );
+  }
+
+  app.get('*', (c) => catchAllBrowse(c));
+
+  app.post('/api/ingest', async (c) => {
+    if (!authorized(c.req.header('authorization'))) {
+      return c.json({ error: 'invalid or missing pool token' }, 401);
     }
     await ensureSeen();
     let payload: unknown;
     try {
       payload = await c.req.json();
     } catch {
-      return c.json({ error: "body must be JSON" }, 400);
+      return c.json({ error: 'body must be JSON' }, 400);
     }
     const parsed = ingestSchema.safeParse(payload);
     if (!parsed.success) {
-      return c.json({ error: "invalid records" }, 400);
+      return c.json({ error: 'invalid records' }, 400);
     }
 
     const fresh = [];
     let duplicates = 0;
-    let rejected = 0;
+    const rejected = 0;
     for (const record of parsed.data.records) {
       const id = record.observation_id;
       if (seen.has(id)) {
@@ -218,7 +237,7 @@ export function createApp(config: Config, log: BucketLog, store?: RecordStore) {
       await log.appendSegment(fresh);
       await log.saveSeen(seen);
       for (const record of fresh) {
-        recordStore.add(record as (typeof fresh)[number] & { pooled_at: number });
+        recordStore.add(record);
       }
     }
     return c.json({ added: fresh.length, duplicates, rejected });

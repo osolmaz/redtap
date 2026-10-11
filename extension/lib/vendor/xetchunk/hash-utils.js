@@ -1,9 +1,9 @@
 import { Hasher } from '../blake3/index.js';
-import { xorbHash } from "./xorb-hash.js";
+import { xorbHash } from './xorb-hash.js';
 const ZERO_KEY = new Uint8Array(32);
 const VERIFICATION_KEY = new Uint8Array([
-    127, 24, 87, 214, 206, 86, 237, 102, 18, 127, 249, 19, 231, 165, 195, 243, 164, 205, 38, 213, 181, 219, 73, 230,
-    65, 36, 152, 127, 40, 251, 148, 195,
+  127, 24, 87, 214, 206, 86, 237, 102, 18, 127, 249, 19, 231, 165, 195, 243, 164, 205, 38, 213, 181, 219, 73,
+  230, 65, 36, 152, 127, 40, 251, 148, 195,
 ]);
 const fileHasher = Hasher.newKeyed(ZERO_KEY);
 const verificationHasher = Hasher.newKeyed(VERIFICATION_KEY);
@@ -14,15 +14,15 @@ const verificationHasher = Hasher.newKeyed(VERIFICATION_KEY);
  * `file_hash_with_salt(chunks, &[0; 32])`.
  */
 export function fileHash(chunks) {
-    // Empty input short-circuits to the all-zero MerkleHash, matching Rust's
-    // `file_hash_with_salt` (`if chunks.is_empty() { return MerkleHash::default(); }`).
-    // Without this we'd return `hmac(0, zero_key)`, which the CAS shard validation rejects
-    // for empty files with "file reconstruction does not produce this hash".
-    if (chunks.length === 0) {
-        return new Uint8Array(32);
-    }
-    const xorb = xorbHash(chunks);
-    return fileHasher.reset().update(xorb).finalize(32);
+  // Empty input short-circuits to the all-zero MerkleHash, matching Rust's
+  // `file_hash_with_salt` (`if chunks.is_empty() { return MerkleHash::default(); }`).
+  // Without this we'd return `hmac(0, zero_key)`, which the CAS shard validation rejects
+  // for empty files with "file reconstruction does not produce this hash".
+  if (chunks.length === 0) {
+    return new Uint8Array(32);
+  }
+  const xorb = xorbHash(chunks);
+  return fileHasher.reset().update(xorb).finalize(32);
 }
 /**
  * HMAC: blake3_keyed_hash(key_bytes, hash_bytes)
@@ -33,7 +33,7 @@ export function fileHash(chunks) {
  * Uses a fresh hasher per call since the key varies.
  */
 export function hmac(hash, key) {
-    return Hasher.newKeyed(key).update(hash).finalize(32);
+  return Hasher.newKeyed(key).update(hash).finalize(32);
 }
 /**
  * Verification hash for a range of chunk hashes.
@@ -43,9 +43,9 @@ export function hmac(hash, key) {
  * Matches Rust's `chunk_verification::range_hash_from_chunks`.
  */
 export function verificationHash(chunkHashes) {
-    const combined = new Uint8Array(chunkHashes.length * 32);
-    for (let i = 0; i < chunkHashes.length; i++) {
-        combined.set(chunkHashes[i], i * 32);
-    }
-    return verificationHasher.reset().update(combined).finalize(32);
+  const combined = new Uint8Array(chunkHashes.length * 32);
+  for (let i = 0; i < chunkHashes.length; i++) {
+    combined.set(chunkHashes[i], i * 32);
+  }
+  return verificationHasher.reset().update(combined).finalize(32);
 }

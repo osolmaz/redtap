@@ -1,0 +1,40 @@
+typescript:
+  coverage:
+    threshold: 85
+    paths:
+      - extension/src
+      - builder/src
+    exclude:
+      - pattern: 'space/src/**'
+        reason: separate HF Space app with its own toolchain
+  complexity:
+    max: 8
+  dry:
+    max_findings: 0
+    paths:
+      - extension/src
+      - builder/src
+    exclude:
+      - '**/*.test.ts'
+      - pattern: 'space/src/**'
+        reason: separate HF Space app with its own toolchain
+      - pattern: 'tests/fixtures/**'
+        reason: captured third-party fixtures, not project code
+      - pattern: 'extension/lib/**'
+        reason: tsc-emitted output and the vendored hub bundle
+  dependency_boundaries:
+    # the extension core may only import its own lib layer
+    - from: extension/src
+      allow:
+        - extension/src/lib
+        - extension/src/lib/vendor
+    - from: extension/src/lib
+      allow:
+        - extension/src/lib
+        - extension/src/lib/vendor
+    # the builder may share the extension's v1 log module and the Space renderer
+    - from: builder/src
+      allow:
+        - builder/src
+        - extension/src/lib
+        - space/src

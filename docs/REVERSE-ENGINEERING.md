@@ -22,25 +22,25 @@ reached for X.
 
 ## The `shreddit-post` attribute payload (the capture contract)
 
-| Attribute | Example | Meaning |
-|---|---|---|
-| `id` | `t3_1wvffcr` | post fullname (t3_ + base36 id) |
-| `post-title` | `Pi 1.0 released - MCP support…` | title |
-| `author` | `psychohistorian8` | author username |
-| `author-id` | `t2_g4rwz` | author fullname |
-| `score` | `85` | score |
-| `upvote-ratio` | `0.956989247311828` | upvote ratio |
-| `comment-count` | `36` | comment count |
-| `subreddit-prefixed-name` | `r/LocalLLaMA` | subreddit |
-| `subreddit-id` | `t5_81eyvm` | subreddit fullname |
-| `permalink` | `/r/LocalLLaMA/comments/1wvffcr/…` | canonical path |
-| `created-timestamp` | `2026-10-02T00:09:04.914000+0000` | post creation time (ISO) |
-| `post-type` | `link` \| `text` \| … | post kind |
-| `domain` | `earendil.com` | link domain (link posts) |
-| `content-href` | `https://earendil.com/posts/pi-1-0/` | external URL (link posts) |
-| `feedindex` | `0` | position in the feed |
-| `view-context` | `SubredditFeed` | which surface rendered the post |
-| `award-count` | `0` | awards |
+| Attribute                 | Example                              | Meaning                         |
+| ------------------------- | ------------------------------------ | ------------------------------- |
+| `id`                      | `t3_1wvffcr`                         | post fullname (t3_ + base36 id) |
+| `post-title`              | `Pi 1.0 released - MCP support…`     | title                           |
+| `author`                  | `psychohistorian8`                   | author username                 |
+| `author-id`               | `t2_g4rwz`                           | author fullname                 |
+| `score`                   | `85`                                 | score                           |
+| `upvote-ratio`            | `0.956989247311828`                  | upvote ratio                    |
+| `comment-count`           | `36`                                 | comment count                   |
+| `subreddit-prefixed-name` | `r/LocalLLaMA`                       | subreddit                       |
+| `subreddit-id`            | `t5_81eyvm`                          | subreddit fullname              |
+| `permalink`               | `/r/LocalLLaMA/comments/1wvffcr/…`   | canonical path                  |
+| `created-timestamp`       | `2026-10-02T00:09:04.914000+0000`    | post creation time (ISO)        |
+| `post-type`               | `link` \| `text` \| …                | post kind                       |
+| `domain`                  | `earendil.com`                       | link domain (link posts)        |
+| `content-href`            | `https://earendil.com/posts/pi-1-0/` | external URL (link posts)       |
+| `feedindex`               | `0`                                  | position in the feed            |
+| `view-context`            | `SubredditFeed`                      | which surface rendered the post |
+| `award-count`             | `0`                                  | awards                          |
 
 Comment counts are attributes; comment bodies only exist on comment pages
 (`shreddit-comment` elements) and are out of scope for the first version.

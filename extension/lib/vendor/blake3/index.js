@@ -23,10 +23,10 @@
  * ```
  */
 // Core exports
-export { Hasher, XofReader } from "./hasher.js";
-export { hash, hashInto, warmupSimd } from "./hash.js";
+export { Hasher, XofReader } from './hasher.js';
+export { hash, hashInto, warmupSimd } from './hash.js';
 // Convenience imports
-import { Hasher } from "./hasher.js";
+import { Hasher } from './hasher.js';
 /**
  * Create a new keyed hasher (MAC).
  *
@@ -44,7 +44,7 @@ import { Hasher } from "./hasher.js";
  * ```
  */
 export function createKeyed(key) {
-    return Hasher.newKeyed(key);
+  return Hasher.newKeyed(key);
 }
 /**
  * Create a new key derivation hasher.
@@ -60,7 +60,7 @@ export function createKeyed(key) {
  * ```
  */
 export function createDeriveKey(context) {
-    return Hasher.newDeriveKey(context);
+  return Hasher.newDeriveKey(context);
 }
 /**
  * Create a new regular hasher for incremental hashing.
@@ -76,23 +76,23 @@ export function createDeriveKey(context) {
  * ```
  */
 export function createHasher() {
-    return new Hasher();
+  return new Hasher();
 }
 // Import for default export
-import { hash, hashInto, warmupSimd } from "./hash.js";
+import { hash, hashInto, warmupSimd } from './hash.js';
 // Pre-warm SIMD in browser environments (non-blocking)
 // This avoids initialization latency on first large hash
-if (typeof globalThis !== "undefined" && typeof globalThis.document !== "undefined") {
-    queueMicrotask(() => {
-        warmupSimd();
-    });
+if (typeof globalThis !== 'undefined' && typeof globalThis.document !== 'undefined') {
+  queueMicrotask(() => {
+    warmupSimd();
+  });
 }
 // Default export for convenience
 export default {
-    hash,
-    hashInto,
-    Hasher,
-    createHasher,
-    createKeyed,
-    createDeriveKey,
+  hash,
+  hashInto,
+  Hasher,
+  createHasher,
+  createKeyed,
+  createDeriveKey,
 };

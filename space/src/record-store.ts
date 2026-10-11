@@ -1,13 +1,13 @@
 // In-memory record store for the browse UI: every pooled observation, with
 // per-post aggregation for the momentum view (first/last sighting, score and
 // comment deltas). Rebuilt from the Bucket segments at boot, updated on ingest.
-import { downloadFile, listFiles } from "@huggingface/hub";
-import { gunzip } from "node:zlib";
-import { promisify } from "node:util";
+import { downloadFile, listFiles } from '@huggingface/hub';
+import { gunzip } from 'node:zlib';
+import { promisify } from 'node:util';
 
 const gunzipAsync = promisify(gunzip);
 
-const REPO = { type: "bucket", name: "osolmaz/redtap-data" } as const;
+const REPO = { type: 'bucket', name: 'osolmaz/redtap-data' } as const;
 
 export type StoredRecord = {
   observation_id: string;
@@ -50,12 +50,12 @@ export type PostSummary = {
 };
 
 // Reddit was founded in June 2005; anything earlier is a bad parse.
-const MIN_SANE_POST_MS = Date.parse("2005-06-01T00:00:00.000Z");
+const MIN_SANE_POST_MS = Date.parse('2005-06-01T00:00:00.000Z');
 
 function postDateMs(sightings: StoredRecord[]): number | null {
   const ceiling = Date.now() + 86_400_000;
   for (const record of sightings) {
-    if (typeof record.post_at !== "string" || record.post_at.length === 0) continue;
+    if (typeof record.post_at !== 'string' || record.post_at.length === 0) continue;
     const ms = Date.parse(record.post_at);
     if (!Number.isFinite(ms) || ms < MIN_SANE_POST_MS || ms > ceiling) continue;
     return ms;
@@ -69,29 +69,49 @@ export class RecordStore {
 
   async ensureLoaded(hubToken: string): Promise<void> {
     if (this.loaded) return;
+    const paths = await this.bucketLogPaths(hubToken);
+    for (const path of paths) {
+      await this.loadSegment(hubToken, path);
+    }
+    this.loaded = true;
+  }
+
+  /** The committed segment paths under the bucket log root. */
+  private async bucketLogPaths(hubToken: string): Promise<string[]> {
+    const paths: string[] = [];
     for await (const entry of listFiles({
       repo: REPO,
       accessToken: hubToken,
       recursive: true,
-      path: "v1/segments/post/",
+      path: 'v1/segments/post/',
       expand: false,
     })) {
-      const path = typeof entry === "object" && "path" in entry ? String(entry.path) : "";
-      if (!path.endsWith(".json.gz")) continue;
-      try {
-        const blob = await downloadFile({ repo: REPO, accessToken: hubToken, path, xet: false });
-        if (blob === null) continue;
-        const text = (await gunzipAsync(Buffer.from(new Uint8Array(await blob.arrayBuffer())))).toString("utf-8");
-        for (const line of text.split("\n")) {
-          if (line.trim() === "") continue;
-          try {
-            const record = JSON.parse(line) as StoredRecord;
-            if (record.observation_id) this.records.set(record.observation_id, record);
-          } catch {}
-        }
-      } catch {}
+      const path = typeof entry === 'object' && 'path' in entry ? entry.path : '';
+      if (path.endsWith('.json.gz')) paths.push(path);
     }
-    this.loaded = true;
+    return paths;
+  }
+
+  /** Load one bucket segment into the store; a bad segment is skipped. */
+  private async loadSegment(hubToken: string, path: string): Promise<void> {
+    try {
+      const blob = await downloadFile({ repo: REPO, accessToken: hubToken, path, xet: false });
+      if (blob === null) return;
+      const text = (await gunzipAsync(Buffer.from(new Uint8Array(await blob.arrayBuffer())))).toString(
+        'utf-8',
+      );
+      for (const line of text.split('\n')) {
+        if (line.trim() === '') continue;
+        try {
+          const record = JSON.parse(line) as StoredRecord;
+          if (record.observation_id !== '') this.records.set(record.observation_id, record);
+        } catch {
+          // a malformed segment line: skip
+        }
+      }
+    } catch {
+      // a malformed segment: skip
+    }
   }
 
   add(record: StoredRecord): void {
@@ -123,18 +143,22 @@ export class RecordStore {
   }
 }
 
-export function summarize(sightings: StoredRecord[]): Omit<PostSummary, "post_id"> {
-  const first = sightings[0];
-  const last = sightings[sightings.length - 1];
-  const scoreFirst = first.metrics?.score ?? null;
-  const scoreLast = last.metrics?.score ?? null;
-  const commentsFirst = first.metrics?.comments ?? null;
-  const commentsLast = last.metrics?.comments ?? null;
+// eslint-disable-next-line complexity -- flat field-aggregation boundary: each branch is a fallback to the first sighting
+export function summarize(sightings: StoredRecord[]): Omit<PostSummary, 'post_id'> {
+  if (sightings.length === 0) {
+    throw new Error('summarize needs at least one sighting');
+  }
+  const first = sightings[0]!;
+  const last = sightings[sightings.length - 1]!;
+  const scoreFirst = first.metrics.score ?? null;
+  const scoreLast = last.metrics.score ?? null;
+  const commentsFirst = first.metrics.comments ?? null;
+  const commentsLast = last.metrics.comments ?? null;
   return {
     subreddit: last.subreddit ?? first.subreddit ?? null,
     title: last.title ?? first.title ?? null,
     author: last.author ?? first.author ?? null,
-    permalink: last.permalink ?? first.permalink ?? "",
+    permalink: last.permalink,
     content_href: last.content_href ?? first.content_href ?? null,
     thumb_href: last.thumb_href ?? first.thumb_href ?? null,
     post_type: last.post_type ?? first.post_type ?? null,
@@ -148,6 +172,9 @@ export function summarize(sightings: StoredRecord[]): Omit<PostSummary, "post_id
     comments_last: commentsLast,
     comments_delta: commentsFirst !== null && commentsLast !== null ? commentsLast - commentsFirst : null,
     selftext:
-      [...sightings].reverse().map((r) => r.selftext).find((t) => typeof t === "string" && t.length > 0) ?? null,
+      [...sightings]
+        .reverse()
+        .map((r) => r.selftext)
+        .find((t) => typeof t === 'string' && t.length > 0) ?? null,
   };
 }

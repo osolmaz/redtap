@@ -48,6 +48,7 @@ v1/                                         frozen until the rollback window end
 ```
 
 A segment has two kinds of line:
+
 - `body`: `h`, `post_id`, title, selftext, author, subreddit, post_at, permalink, content_href, thumb_href, post_type
 - `sight`: `oid`, `post_id`, `t`, `src`, `by`, score, comments, ratio, `h`
 

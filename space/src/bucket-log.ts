@@ -6,18 +6,18 @@
 // Each batch is one gzipped JSONL segment. Deduplication uses a seen-set
 // object (v1/seen.json) that is rewritten on every batch; the segments
 // themselves are never modified.
-import { createHash, randomUUID } from "node:crypto";
-import { gzip } from "node:zlib";
-import { promisify } from "node:util";
+import { createHash, randomUUID } from 'node:crypto';
+import { gzip } from 'node:zlib';
+import { promisify } from 'node:util';
 
-import { downloadFile, listFiles, uploadFile } from "@huggingface/hub";
+import { downloadFile, listFiles, uploadFile } from '@huggingface/hub';
 
 // hub v2 signatures (matching xtap-pool): uploadFile takes file: {path, content: Blob}.
 
 const gzipAsync = promisify(gzip);
 
-const REPO = { type: "bucket", name: "osolmaz/redtap-data" } as const;
-const SEEN_PATH = "v1/seen.json";
+const REPO = { type: 'bucket', name: 'osolmaz/redtap-data' } as const;
+const SEEN_PATH = 'v1/seen.json';
 const MAX_SEEN = 200_000;
 
 export type PooledRecord = Readonly<Record<string, unknown>>;
@@ -34,21 +34,22 @@ export type BucketLog = Readonly<{
   readControl: () => Promise<Record<string, unknown> | null>;
 }>;
 
-let sequence = 0;
-
 function sha256(body: string): string {
-  return createHash("sha256").update(body).digest("hex");
+  return createHash('sha256').update(body).digest('hex');
 }
 
-export async function openBucketLog(hubArgs: {
-  accessToken: string;
-}): Promise<BucketLog> {
+export function openBucketLog(hubArgs: { accessToken: string }): Promise<BucketLog> {
   const hub = { ...hubArgs, repo: REPO } as const;
 
   const loadSeen = async (): Promise<Set<string>> => {
     try {
-      const blob = await downloadFile({ repo: REPO, accessToken: hub.accessToken, path: SEEN_PATH, xet: false });
-      const parsed = blob === null ? {} : JSON.parse(await blob.text()) as { ids?: string[] };
+      const blob = await downloadFile({
+        repo: REPO,
+        accessToken: hub.accessToken,
+        path: SEEN_PATH,
+        xet: false,
+      });
+      const parsed = blob === null ? {} : (JSON.parse(await blob.text()) as { ids?: string[] });
       return new Set(Array.isArray(parsed.ids) ? parsed.ids : []);
     } catch {
       return new Set();
@@ -67,16 +68,13 @@ export async function openBucketLog(hubArgs: {
   };
 
   const appendSegment = async (lines: readonly PooledRecord[]) => {
-    sequence += 1;
     const now = new Date();
-    const body = lines.map((line) => JSON.stringify(line)).join("\n") + "\n";
+    const body = lines.map((line) => JSON.stringify(line)).join('\n') + '\n';
     const compressed = await gzipAsync(body);
     const transactionId = randomUUID();
-    const day = now.toISOString().slice(0, 10).replace(/-/g, "/");
-    const stamp = String(now.getTime()).padStart(13, "0");
-    const path = (
-      `v1/segments/post/${day}/${stamp}-${transactionId}-${sha256(body)}.json.gz`
-    );
+    const day = now.toISOString().slice(0, 10).replace(/-/g, '/');
+    const stamp = String(now.getTime()).padStart(13, '0');
+    const path = `v1/segments/post/${day}/${stamp}-${transactionId}-${sha256(body)}.json.gz`;
     await uploadFile({
       repo: REPO,
       accessToken: hub.accessToken,
@@ -92,10 +90,10 @@ export async function openBucketLog(hubArgs: {
       repo: REPO,
       accessToken: hub.accessToken,
       recursive: true,
-      path: "v1/segments/post/",
+      path: 'v1/segments/post/',
       expand: false,
     })) {
-      if (typeof entry === "object" && "path" in entry && String(entry.path).endsWith(".json.gz")) {
+      if (typeof entry === 'object' && 'path' in entry && entry.path.endsWith('.json.gz')) {
         total += 1;
       }
     }
@@ -104,14 +102,19 @@ export async function openBucketLog(hubArgs: {
 
   const readControl = async (): Promise<Record<string, unknown> | null> => {
     try {
-      const blob = await downloadFile({ repo: REPO, accessToken: hub.accessToken, path: "control/instructions.json", xet: false });
+      const blob = await downloadFile({
+        repo: REPO,
+        accessToken: hub.accessToken,
+        path: 'control/instructions.json',
+        xet: false,
+      });
       if (blob === null) return null;
-      const parsed = JSON.parse(await blob.text());
-      return parsed && typeof parsed === "object" ? (parsed as Record<string, unknown>) : null;
+      const parsed: unknown = JSON.parse(await blob.text());
+      return parsed !== null && typeof parsed === 'object' ? (parsed as Record<string, unknown>) : null;
     } catch {
       return null;
     }
   };
 
-  return { loadSeen, appendSegment, saveSeen, totalRecords, readControl };
+  return Promise.resolve({ loadSeen, appendSegment, saveSeen, totalRecords, readControl });
 }

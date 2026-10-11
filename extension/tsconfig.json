@@ -1,0 +1,21 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ES2022",
+    "moduleResolution": "bundler",
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "types": ["chrome"],
+    "strict": true,
+    "noImplicitAny": true,
+    "noImplicitOverride": true,
+    "noUncheckedIndexedAccess": true,
+    "noFallthroughCasesInSwitch": true,
+    "useUnknownInCatchVariables": true,
+    "noEmitOnError": true,
+    "skipLibCheck": true,
+    "outDir": ".",
+    "rootDir": "src",
+    "rewriteRelativeImportExtensions": true
+  },
+  "files": ["src/background.ts", "src/content.ts", "src/options.ts", "src/popup.ts"]
+}

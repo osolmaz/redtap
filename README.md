@@ -57,8 +57,6 @@ is reachable from your Tailnet on this machine's Tailscale IP. Add `--base
 folder, and `.github/workflows/build-site.yml` publishes it to GitHub Pages —
 manual trigger only, never scheduled.
 
-
-
 ## Why DOM capture
 
 Reverse engineering (see `docs/REVERSE-ENGINEERING.md`): new Reddit

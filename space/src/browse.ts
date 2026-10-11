@@ -3,28 +3,28 @@
 // scope (hour/day/week/month/year/all or a custom date range), subreddit
 // filter pills, vote-pill cards with bodies extended by default.
 
-import type { PostSummary, StoredRecord } from "./record-store.js";
-import { renderMarkdown } from "./md.ts";
-import { engagementChart } from "./chart.ts";
+import type { PostSummary, StoredRecord } from './record-store.js';
+import { renderMarkdown } from './md.ts';
+import { engagementChart } from './chart.ts';
 
-type SortKey = "hot" | "new" | "top" | "rising";
+type SortKey = 'hot' | 'new' | 'top' | 'rising';
 
-const SORTS: ReadonlyArray<{ key: SortKey; label: string }> = [
-  { key: "hot", label: "Hot" },
-  { key: "new", label: "New" },
-  { key: "top", label: "Top" },
-  { key: "rising", label: "Rising" },
+const SORTS: readonly { key: SortKey; label: string }[] = [
+  { key: 'hot', label: 'Hot' },
+  { key: 'new', label: 'New' },
+  { key: 'top', label: 'Top' },
+  { key: 'rising', label: 'Rising' },
 ];
 
-type RangeKey = "hour" | "day" | "week" | "month" | "year" | "all";
+type RangeKey = 'hour' | 'day' | 'week' | 'month' | 'year' | 'all';
 
-const RANGES: ReadonlyArray<{ key: RangeKey; label: string; ms: number }> = [
-  { key: "hour", label: "hour", ms: 60 * 60_000 },
-  { key: "day", label: "day", ms: 24 * 60 * 60_000 },
-  { key: "week", label: "week", ms: 7 * 24 * 60 * 60_000 },
-  { key: "month", label: "month", ms: 30 * 24 * 60 * 60_000 },
-  { key: "year", label: "year", ms: 365 * 24 * 60 * 60_000 },
-  { key: "all", label: "all", ms: Number.POSITIVE_INFINITY },
+const RANGES: readonly { key: RangeKey; label: string; ms: number }[] = [
+  { key: 'hour', label: 'hour', ms: 60 * 60_000 },
+  { key: 'day', label: 'day', ms: 24 * 60 * 60_000 },
+  { key: 'week', label: 'week', ms: 7 * 24 * 60 * 60_000 },
+  { key: 'month', label: 'month', ms: 30 * 24 * 60 * 60_000 },
+  { key: 'year', label: 'year', ms: 365 * 24 * 60 * 60_000 },
+  { key: 'all', label: 'all', ms: Number.POSITIVE_INFINITY },
 ];
 
 export type BrowseQuery = {
@@ -37,39 +37,37 @@ export type BrowseQuery = {
 
 function escapeHtml(value: string): string {
   return value
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;");
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;');
 }
 
 function ago(ms: number, now: number): string {
   const minutes = Math.max(0, Math.round((now - ms) / 60000));
-  if (minutes < 60) return minutes + "m ago";
+  if (minutes < 60) return `${minutes}m ago`;
   const hours = Math.round(minutes / 60);
-  if (hours < 48) return hours + "h ago";
-  return Math.round(hours / 24) + "d ago";
+  if (hours < 48) return `${hours}h ago`;
+  return `${Math.round(hours / 24)}d ago`;
 }
 
 function delta(value: number | null): string {
-  if (value === null || value === 0) return "";
-  return value > 0 ? "+" + value : String(value);
+  if (value === null || value === 0) return '';
+  return value > 0 ? `+${value}` : String(value);
 }
 
 function deltaClass(value: number | null): string {
-  if (value === null || value === 0) return "flat";
-  return value > 0 ? "up" : "down";
+  if (value === null || value === 0) return 'flat';
+  return value > 0 ? 'up' : 'down';
 }
 
 function sortPosts(posts: PostSummary[], sort: SortKey): PostSummary[] {
   const sorted = [...posts];
-  if (sort === "new") {
-    sorted.sort(
-      (a, b) => (b.post_at ?? b.last_seen) - (a.post_at ?? a.last_seen),
-    );
-  } else if (sort === "top") {
+  if (sort === 'new') {
+    sorted.sort((a, b) => (b.post_at ?? b.last_seen) - (a.post_at ?? a.last_seen));
+  } else if (sort === 'top') {
     sorted.sort((a, b) => (b.score_last ?? -1) - (a.score_last ?? -1));
-  } else if (sort === "rising") {
+  } else if (sort === 'rising') {
     sorted.sort((a, b) => (b.comments_delta ?? -1) - (a.comments_delta ?? -1));
   } else {
     sorted.sort((a, b) => (b.score_delta ?? -1) - (a.score_delta ?? -1));
@@ -83,7 +81,7 @@ const BODY_LIMIT = 12_000;
 function isDirectImageUrl(url: string): boolean {
   try {
     const parsed = new URL(url);
-    if (parsed.protocol !== "https:" && parsed.protocol !== "http:") return false;
+    if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') return false;
     return /\.(jpe?g|png|gif|webp|avif)([?#]|$)/i.test(parsed.pathname + parsed.search);
   } catch {
     return false;
@@ -92,21 +90,21 @@ function isDirectImageUrl(url: string): boolean {
 
 const CARD_BODY_LIMIT = 1_000;
 
-function bodyHtml(p: PostSummary, mode: "card" | "page" = "card"): string {
-  if (!p.selftext) return "";
+function bodyHtml(p: PostSummary, mode: 'card' | 'page' = 'card'): string {
+  if (!p.selftext) return '';
   const text = p.selftext;
-  const limit = mode === "page" ? BODY_LIMIT : CARD_BODY_LIMIT;
+  const limit = mode === 'page' ? BODY_LIMIT : CARD_BODY_LIMIT;
   if (text.length <= limit) {
     return `<div class="md">${renderMarkdown(text)}</div>`;
   }
   // Split at a block boundary near the limit so the fold starts clean.
-  let cut = text.lastIndexOf("\n\n", limit);
+  let cut = text.lastIndexOf('\n\n', limit);
   if (cut < limit / 2) cut = limit;
   const head = `<div class="md">${renderMarkdown(text.slice(0, cut))}</div>`;
-  if (mode === "card") {
-    return `${head}<a class="more" href="${postPath(p)}">read more (${(text.length - cut).toLocaleString("en-US")} more characters) →</a>`;
+  if (mode === 'card') {
+    return `${head}<a class="more" href="${postPath(p)}">read more (${(text.length - cut).toLocaleString('en-US')} more characters) →</a>`;
   }
-  return `${head}<details class="more"><summary>show remaining ${(text.length - cut).toLocaleString("en-US")} characters</summary><div class="md">${renderMarkdown(text.slice(cut))}</div></details>`;
+  return `${head}<details class="more"><summary>show remaining ${(text.length - cut).toLocaleString('en-US')} characters</summary><div class="md">${renderMarkdown(text.slice(cut))}</div></details>`;
 }
 
 const MEDIA_HINT = /video|gallery|image|rich/i;
@@ -121,32 +119,32 @@ function imageHtml(p: PostSummary): string {
       : p.post_type && MEDIA_HINT.test(p.post_type) && p.thumb_href && isDirectImageUrl(p.thumb_href)
         ? p.thumb_href
         : null;
-  if (!src) return "";
+  if (!src) return '';
   return `<a class="imglink" href="${escapeHtml(postPath(p))}"><img class="thumb" src="${escapeHtml(src)}" loading="lazy" referrerpolicy="no-referrer" alt="post image" /></a>`;
 }
 
 // Reddit was founded in June 2005; sighting times before that are garbage.
-const MIN_SANE_MS = Date.parse("2005-06-01T00:00:00.000Z");
+const MIN_SANE_MS = Date.parse('2005-06-01T00:00:00.000Z');
 
 function whenLabel(p: PostSummary, now: number): string {
   if (p.post_at !== null) return ago(p.post_at, now);
   if (p.first_seen >= MIN_SANE_MS) return ago(p.first_seen, now);
-  return "—";
+  return '—';
 }
 
 function whenTitle(p: PostSummary): string {
   if (p.post_at !== null)
-    return "posted " + new Date(p.post_at).toISOString().slice(0, 16).replace("T", " ") + " UTC";
-  return "first seen " + new Date(p.first_seen).toISOString().slice(0, 16).replace("T", " ") + " UTC";
+    return 'posted ' + new Date(p.post_at).toISOString().slice(0, 16).replace('T', ' ') + ' UTC';
+  return 'first seen ' + new Date(p.first_seen).toISOString().slice(0, 16).replace('T', ' ') + ' UTC';
 }
 
 /** Local standalone page for a post, reddit-path style. */
 export function postPath(p: { post_id: string; subreddit?: string | null }): string {
-  const sub = p.subreddit ? "/r/" + p.subreddit.replace(/^r\//i, "") : "";
-  return `${sub}/comments/${p.post_id.replace(/^t3_/, "")}/`;
+  const sub = p.subreddit ? '/r/' + p.subreddit.replace(/^r\//i, '') : '';
+  return `${sub}/comments/${p.post_id.replace(/^t3_/, '')}/`;
 }
 
-function card(p: PostSummary, now: number, sort: SortKey): string {
+function card(p: PostSummary, now: number, _sort: SortKey): string {
   const body = bodyHtml(p);
   const image = imageHtml(p);
   const scoreDelta = delta(p.score_delta);
@@ -155,15 +153,15 @@ function card(p: PostSummary, now: number, sort: SortKey): string {
   return `<article class="post">
     <div class="vote">
       <div class="arrow">▲</div>
-      <div class="score">${p.score_last ?? "–"}</div>
-      <div class="diff ${deltaClass(p.score_delta)}">${scoreDelta || "&nbsp;"}</div>
+      <div class="score">${p.score_last ?? '–'}</div>
+      <div class="diff ${deltaClass(p.score_delta)}">${scoreDelta || '&nbsp;'}</div>
       <a class="sightings" title="times seen — click for the engagement graph" href="${postPath(p)}">${p.observations}👁</a>
     </div>
     <div class="content">
       <div class="meta">
-        <a class="sub" href="${pageUrl({ subreddit: p.subreddit })}">${escapeHtml(p.subreddit ?? "r/unknown")}</a>
+        <a class="sub" href="${pageUrl({ subreddit: p.subreddit })}">${escapeHtml(p.subreddit ?? 'r/unknown')}</a>
         <span class="sep">·</span>
-        <span class="author">u/${escapeHtml(p.author ?? "unknown")}</span>
+        <span class="author">u/${escapeHtml(p.author ?? 'unknown')}</span>
         <span class="sep">·</span>
         <span class="when" title="${whenTitle(p)}">${whenLabel(p, now)}</span>
       </div>
@@ -171,38 +169,52 @@ function card(p: PostSummary, now: number, sort: SortKey): string {
       ${image}
       ${body}
       <div class="foot">
-        <span class="comments">💬 ${p.comments_last ?? "–"}${commentsDelta ? ` <span class="diff ${deltaClass(p.comments_delta)}">(${commentsDelta})</span>` : ""}</span>
+        <span class="comments">💬 ${p.comments_last ?? '–'}${commentsDelta ? ` <span class="diff ${deltaClass(p.comments_delta)}">(${commentsDelta})</span>` : ''}</span>
         <a class="open" href="https://www.reddit.com${escapeHtml(p.permalink)}" target="_blank" rel="noopener noreferrer">open on reddit ↗</a>
       </div>
     </div>
   </article>`;
 }
 
+/** A YYYY-MM-DD string, narrowed. */
+function isDate(value: string | undefined): value is string {
+  return /^\d{4}-\d{2}-\d{2}$/.test(value ?? '');
+}
+
 // URL builder preserving the active scope across navigation links.
-let pageState: Required<BrowseQuery> = { subreddit: "", sort: "hot", range: "day", from: "", to: "" };
+let pageState: Required<BrowseQuery> = { subreddit: '', sort: 'hot', range: 'day', from: '', to: '' };
 
 /** Reddit-style path for the current scope: /r/{sub}/{sort}/{range|from/to}/.
  *  Defaults (hot, day, no sub) stay out of the path. */
+// eslint-disable-next-line complexity -- one branch per path segment, each skipping a default
 export function pageUrl(overrides: Partial<BrowseQuery>): string {
   const merged = { ...pageState, ...overrides };
+  const sub = merged.subreddit ?? '';
+  const sort = merged.sort ?? '';
+  const range = merged.range ?? '';
+  const rawFrom = merged.from ?? '';
+  const rawTo = merged.to ?? '';
+  const from = isDate(rawFrom) ? rawFrom : '';
+  const to = isDate(rawTo) ? rawTo : '';
   const parts: string[] = [];
-  if (merged.subreddit) parts.push("r/" + merged.subreddit.replace(/^r\//i, ""));
-  if (merged.sort && merged.sort !== "hot") parts.push(merged.sort);
-  if (merged.from) {
-    parts.push(merged.from);
-    if (merged.to && merged.to !== merged.from) parts.push(merged.to);
-  } else if (merged.range && merged.range !== "day") {
-    parts.push(merged.range);
+  if (sub !== '') parts.push(`r/${sub.replace(/^r\//i, '')}`);
+  if (sort !== '' && sort !== 'hot') parts.push(sort);
+  if (from !== '') {
+    parts.push(from);
+    if (to !== from) parts.push(to);
+  } else if (range !== '' && range !== 'day') {
+    parts.push(range);
   }
-  return "/" + (parts.join("/") ? parts.join("/") + "/" : "");
+  const joined = parts.join('/');
+  return joined === '' ? '/' : `/${joined}/`;
 }
 
 /** Path prefix for form actions: the scope without the date tail. */
 function scopeUrl(): string {
   const parts: string[] = [];
-  if (pageState.subreddit) parts.push("r/" + pageState.subreddit.replace(/^r\//i, ""));
-  if (pageState.sort && pageState.sort !== "hot") parts.push(pageState.sort);
-  return "/" + (parts.join("/") ? parts.join("/") + "/" : "");
+  if (pageState.subreddit) parts.push('r/' + pageState.subreddit.replace(/^r\//i, ''));
+  if (pageState.sort && pageState.sort !== 'hot') parts.push(pageState.sort);
+  return '/' + (parts.join('/') ? parts.join('/') + '/' : '');
 }
 
 const STYLE = `    * { box-sizing: border-box; }
@@ -315,88 +327,94 @@ const STYLE = `    * { box-sizing: border-box; }
     .gobtn:hover { background: #ff6a33; }
 `;
 
-export function renderBrowsePage(
-  posts: PostSummary[],
-  query: BrowseQuery,
-  now: number,
-): string {
-  const activeSort: SortKey = SORTS.some((s) => s.key === query.sort) ? (query.sort as SortKey) : "hot";
-  const from = /^\d{4}-\d{2}-\d{2}$/.test(query.from ?? "") ? (query.from as string) : "";
-  const to = /^\d{4}-\d{2}-\d{2}$/.test(query.to ?? "") ? (query.to as string) : "";
-  const hasDates = from !== "" || to !== "";
+// eslint-disable-next-line complexity -- page-shell assembly: one branch per UI region
+export function renderBrowsePage(posts: PostSummary[], query: BrowseQuery, now: number): string {
+  const from = isDate(query.from ?? '') ? (query.from ?? '') : '';
+  const to = isDate(query.to ?? '') ? (query.to ?? '') : '';
+  const hasDates = from !== '' || to !== '';
   // Explicit dates replace the preset range entirely; the default is daily.
+  const activeSort: SortKey = SORTS.some((s) => s.key === query.sort) ? (query.sort as SortKey) : 'hot';
   const activeRange: RangeKey = hasDates
-    ? "all"
+    ? 'all'
     : RANGES.some((r) => r.key === query.range)
       ? (query.range as RangeKey)
-      : "day";
+      : 'day';
   pageState = {
-    subreddit: query.subreddit ?? "",
+    subreddit: query.subreddit ?? '',
     sort: activeSort,
     range: activeRange,
     from,
-    to: from !== "" && (to === from || to === "") ? from : to,
+    to: from !== '' && (to === from || to === '') ? from : to,
   };
 
-  const isDayPage = from !== "" && (to === from || to === "");
-  const subreddits = [...new Set(posts.map((p) => p.subreddit).filter((s): s is string => s !== null))].sort();
+  const subreddits = [
+    ...new Set(posts.map((p) => p.subreddit).filter((s): s is string => s !== null)),
+  ].sort();
   const visible = filterPosts(posts, now);
 
-  const rows = sortPosts(visible, activeSort).map((p) => card(p, now, activeSort)).join("\n");
+  const rows = sortPosts(visible, activeSort)
+    .map((p) => card(p, now, activeSort))
+    .join('\n');
 
   const tabLinks = SORTS.map(
     (s) =>
-      `<a class="tab${s.key === activeSort ? " on" : ""}" href="${pageUrl({ sort: s.key })}">${s.label}</a>`,
-  ).join("");
+      `<a class="tab${s.key === activeSort ? ' on' : ''}" href="${pageUrl({ sort: s.key })}">${s.label}</a>`,
+  ).join('');
   const rangeLinks = RANGES.map(
     (r) =>
-      `<a class="pill${r.key === activeRange && !from && !to ? " on" : ""}" href="${pageUrl({ range: r.key, from: "", to: "" })}">${r.label}</a>`,
-  ).join("");
+      `<a class="pill${r.key === activeRange && !from && !to ? ' on' : ''}" href="${pageUrl({ range: r.key, from: '', to: '' })}">${r.label}</a>`,
+  ).join('');
   // subreddit picker: r/-prefixed labels, current one marked in the menu
-  const rName = (s: string): string => (s.startsWith("r/") ? s : `r/${s}`);
+  const rName = (s: string): string => (s.startsWith('r/') ? s : `r/${s}`);
   const subItems = [
-    `<a class="${pageState.subreddit ? "" : "on"}" href="${pageUrl({ subreddit: "" })}">r/All</a>`,
+    `<a class="${pageState.subreddit ? '' : 'on'}" href="${pageUrl({ subreddit: '' })}">r/All</a>`,
   ]
     .concat(
-    subreddits.map(
-      (s) =>
-        `<a class="${s === pageState.subreddit ? "on" : ""}" href="${pageUrl({ subreddit: s })}">${escapeHtml(rName(s))}</a>`,
+      subreddits.map(
+        (s) =>
+          `<a class="${s === pageState.subreddit ? 'on' : ''}" href="${pageUrl({ subreddit: s })}">${escapeHtml(rName(s))}</a>`,
       ),
     )
-    .join("");
-  const subLabel = pageState.subreddit ? escapeHtml(rName(pageState.subreddit)) : "r/All";
+    .join('');
+  const subLabel = pageState.subreddit ? escapeHtml(rName(pageState.subreddit)) : 'r/All';
   // Hacker-News-style time navigation: every browsable window (a calendar
   // day, a custom range, or the day/week/month/year scopes) gets prev/next
   // links that shift the window by its own length.
   const fmtDay = (ms: number): string => new Date(ms).toISOString().slice(0, 10);
   const fmtShort = (d: string): string => {
-    const t = new Date(d + "T00:00:00.000Z");
+    const t = new Date(d + 'T00:00:00.000Z');
     return Number.isFinite(t.getTime())
-      ? t.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" })
+      ? t.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' })
       : d;
   };
   const DAY_MS = 86_400_000;
-  let timeNav = "";
+  let timeNav = '';
   {
-    const fromMs = from ? Date.parse(from + "T00:00:00.000Z") : null;
-    const toMs = to ? Date.parse(to + "T00:00:00.000Z") : null;
+    const fromMs = from ? Date.parse(from + 'T00:00:00.000Z') : null;
+    const toMs = to ? Date.parse(to + 'T00:00:00.000Z') : null;
     let startMs: number | null = null;
     let windowMs: number | null = null;
-    let title = "";
+    let title = '';
     if (fromMs !== null) {
       const end = toMs ?? fromMs;
       startMs = fromMs;
       windowMs = Math.max(end - fromMs + DAY_MS, DAY_MS);
       title =
         from === to
-          ? new Date(fromMs).toLocaleDateString("en-US", { weekday: "long", year: "numeric", month: "long", day: "numeric", timeZone: "UTC" })
+          ? new Date(fromMs).toLocaleDateString('en-US', {
+              weekday: 'long',
+              year: 'numeric',
+              month: 'long',
+              day: 'numeric',
+              timeZone: 'UTC',
+            })
           : `${fmtShort(from)} → ${fmtShort(to || from)}`;
     } else {
       const preset = RANGES.find((r) => r.key === activeRange);
-      if (preset && Number.isFinite(preset.ms) && preset.key !== "hour") {
+      if (preset && Number.isFinite(preset.ms) && preset.key !== 'hour') {
         startMs = now - preset.ms;
         windowMs = preset.ms;
-        title = "past " + preset.label;
+        title = 'past ' + preset.label;
       }
     }
     if (startMs !== null && windowMs !== null) {
@@ -404,9 +422,14 @@ export function renderBrowsePage(
       const prevTo = fmtDay(startMs - 1);
       const prev = pageUrl({ range: undefined, from: prevFrom, to: prevTo });
       const nextStart = startMs + windowMs;
-      const next = nextStart < now
-        ? pageUrl({ range: undefined, from: fmtDay(nextStart), to: fmtDay(Math.min(nextStart + windowMs, now) - DAY_MS) })
-        : null;
+      const next =
+        nextStart < now
+          ? pageUrl({
+              range: undefined,
+              from: fmtDay(nextStart),
+              to: fmtDay(Math.min(nextStart + windowMs, now) - DAY_MS),
+            })
+          : null;
       timeNav = `<div class="daynav">
         <a href="${prev}">← prev</a>
         <span class="daytitle">${escapeHtml(title)}</span>
@@ -434,7 +457,7 @@ ${STYLE}  </style>  </style>
         <summary>${subLabel}<span class="car">▾</span></summary>
         <div class="menu">${subItems}</div>
       </details>
-      <div class="count">${visible.length} posts · ${subreddits.length === 1 ? "1 sub" : subreddits.length + " subs"} · <a href="/rss.xml" style="color:#ff4500;text-decoration:none;font-weight:600">RSS</a></div>
+      <div class="count">${visible.length} posts · ${subreddits.length === 1 ? '1 sub' : `${subreddits.length} subs`} · <a href="/rss.xml" style="color:#ff4500;text-decoration:none;font-weight:600">RSS</a></div>
       <nav class="tabs">${tabLinks}</nav>
     </div>
   </header>
@@ -444,7 +467,7 @@ ${STYLE}  </style>  </style>
       <nav class="rangebar">${rangeLinks}</nav>
       <form class="custom" method="get" action="${scopeUrl()}">
         <input type="hidden" name="sort" value="${activeSort}" />
-        ${pageState.subreddit ? `<input type="hidden" name="subreddit" value="${escapeHtml(pageState.subreddit)}" />` : ""}
+        ${pageState.subreddit ? `<input type="hidden" name="subreddit" value="${escapeHtml(pageState.subreddit)}" />` : ''}
         <input type="date" name="from" value="${from}" />
         <input type="date" name="to" value="${to}" />
         <button type="submit">apply</button>
@@ -456,51 +479,70 @@ ${STYLE}  </style>  </style>
 </html>`;
 }
 
-function filterPosts(posts: PostSummary[], now: number): PostSummary[] {
-  const { subreddit, range, from, to } = pageState;
-  let filtered = subreddit ? posts.filter((p) => p.subreddit === subreddit) : posts;
-
+/** The time-window bounds for the active scope, when it has one. */
+function windowBounds(now: number): {
+  startMs: number | null;
+  fromMs: number | undefined;
+  toMs: number | undefined;
+} {
+  const { range, from, to } = pageState;
   const preset = RANGES.find((r) => r.key === range);
-  const startMs = preset && preset.ms !== Number.POSITIVE_INFINITY ? now - preset.ms : null;
-  const fromMs = from ? Date.parse(from + "T00:00:00.000Z") : undefined;
-  const toMs = to ? Date.parse(to + "T23:59:59.999Z") : undefined;
-
-  if (startMs === null && fromMs === undefined && toMs === undefined) return filtered;
-  return filtered.filter((p) => {
-    const at = p.post_at;
-    if (at === null) return false;
-    if (startMs !== null && at < startMs) return false;
-    if (fromMs !== undefined && at < fromMs) return false;
-    if (toMs !== undefined && at > toMs) return false;
-    return true;
-  });
+  return {
+    startMs: preset !== undefined && preset.ms !== Number.POSITIVE_INFINITY ? now - preset.ms : null,
+    fromMs: from !== '' ? Date.parse(`${from}T00:00:00.000Z`) : undefined,
+    toMs: to !== '' ? Date.parse(`${to}T23:59:59.999Z`) : undefined,
+  };
 }
 
-export function renderPostPage(
-  summary: PostSummary,
-  sightings: StoredRecord[],
-  now: number,
-): string {
+function inWindow(
+  at: number | null,
+  bounds: { startMs: number | null; fromMs: number | undefined; toMs: number | undefined },
+): boolean {
+  if (at === null) return false;
+  if (bounds.startMs !== null && at < bounds.startMs) return false;
+  if (bounds.fromMs !== undefined && at < bounds.fromMs) return false;
+  if (bounds.toMs !== undefined && at > bounds.toMs) return false;
+  return true;
+}
+
+function filterPosts(posts: PostSummary[], now: number): PostSummary[] {
+  const { subreddit } = pageState;
+  const filtered = subreddit !== '' ? posts.filter((p) => p.subreddit === subreddit) : posts;
+  const bounds = windowBounds(now);
+  if (bounds.startMs === null && bounds.fromMs === undefined && bounds.toMs === undefined) return filtered;
+  return filtered.filter((p) => inWindow(p.post_at, bounds));
+}
+
+// eslint-disable-next-line complexity -- post-page assembly: one branch per block
+export function renderPostPage(summary: PostSummary, sightings: StoredRecord[], now: number): string {
   const p = summary;
   const scoreDelta = delta(p.score_delta);
   const commentsDelta = delta(p.comments_delta);
-  const redditUrl = "https://www.reddit.com" + p.permalink;
-  const firstSeen = new Date(p.first_seen).toISOString().slice(0, 16).replace("T", " ") + " UTC";
-  const lastSeen = new Date(p.last_seen).toISOString().slice(0, 16).replace("T", " ") + " UTC";
-  const posted = p.post_at !== null ? new Date(p.post_at).toUTCString() : "unknown";
+  const redditUrl = 'https://www.reddit.com' + p.permalink;
+  const firstSeen = new Date(p.first_seen).toISOString().slice(0, 16).replace('T', ' ') + ' UTC';
+  const lastSeen = new Date(p.last_seen).toISOString().slice(0, 16).replace('T', ' ') + ' UTC';
+  const posted = p.post_at !== null ? new Date(p.post_at).toUTCString() : 'unknown';
   const image = imageHtml(p);
   const stat = (label: string, value: string): string => `<span>${label} <b>${escapeHtml(value)}</b></span>`;
-  const chartHtml = sightings.length > 1 ? engagementChart(sightings) : "";
-  const history = sightings.length > 1
-    ? `<div class="stats">` + [
-        stat("first seen", firstSeen),
-        stat("last seen", lastSeen),
-        stat("score then", String(p.score_first ?? "?")),
-        stat("score now", String(p.score_last ?? "?")),
-        stat("gained", (scoreDelta && scoreDelta !== "0" ? scoreDelta : "0")),
-        stat("sightings", String(p.observations)),
-      ].join("") + `</div>`
-    : `<div class="stats">` + [stat("posted", posted), stat("seen", p.observations + (p.observations === 1 ? " time" : " times"))].join("") + `</div>`;
+  const chartHtml = sightings.length > 1 ? engagementChart(sightings) : '';
+  const history =
+    sightings.length > 1
+      ? `<div class="stats">` +
+        [
+          stat('first seen', firstSeen),
+          stat('last seen', lastSeen),
+          stat('score then', String(p.score_first ?? '?')),
+          stat('score now', String(p.score_last ?? '?')),
+          stat('gained', scoreDelta && scoreDelta !== '0' ? scoreDelta : '0'),
+          stat('sightings', String(p.observations)),
+        ].join('') +
+        `</div>`
+      : `<div class="stats">` +
+        [
+          stat('posted', posted),
+          stat('seen', `${p.observations} ${p.observations === 1 ? 'time' : 'times'}`),
+        ].join('') +
+        `</div>`;
   return `<!doctype html>
 <html>
 <head>
@@ -515,32 +557,32 @@ ${STYLE}  </style>
   <header>
     <div class="headrow">
       <div class="logo">redtap <span>pool</span></div>
-      <a class="backlink" href="${pageUrl({ subreddit: p.subreddit })}">← ${escapeHtml(p.subreddit ?? "pool")}</a>
+      <a class="backlink" href="${pageUrl({ subreddit: p.subreddit })}">← ${escapeHtml(p.subreddit ?? 'pool')}</a>
     </div>
   </header>
   <div class="wrap">
     <article class="post postpage">
       <div class="vote">
         <div class="arrow">▲</div>
-        <div class="score">${p.score_last ?? "–"}</div>
-        <div class="diff ${deltaClass(p.score_delta)}">${scoreDelta || "&nbsp;"}</div>
+        <div class="score">${p.score_last ?? '–'}</div>
+        <div class="diff ${deltaClass(p.score_delta)}">${scoreDelta || '&nbsp;'}</div>
         <a class="sightings" title="times seen — click for the engagement graph" href="${postPath(p)}">${p.observations}👁</a>
       </div>
       <div class="content">
         <div class="meta">
-          <a class="sub" href="${pageUrl({ subreddit: p.subreddit })}">${escapeHtml(p.subreddit ?? "r/unknown")}</a>
+          <a class="sub" href="${pageUrl({ subreddit: p.subreddit })}">${escapeHtml(p.subreddit ?? 'r/unknown')}</a>
           <span class="sep">·</span>
-          <span class="author">u/${escapeHtml(p.author ?? "unknown")}</span>
+          <span class="author">u/${escapeHtml(p.author ?? 'unknown')}</span>
           <span class="sep">·</span>
           <span class="when" title="${whenTitle(p)}">${whenLabel(p, now)}</span>
         </div>
         <h1 class="title">${escapeHtml(p.title ?? p.post_id)}</h1>
         ${image}
-        ${bodyHtml(p, "page")}
+        ${bodyHtml(p, 'page')}
         ${chartHtml}
         ${history}
         <a class="gobtn" href="${escapeHtml(redditUrl)}" target="_blank" rel="noopener noreferrer">open on reddit ↗</a>
-        <span class="foot"><span class="comments">💬 ${p.comments_last ?? "–"}${commentsDelta ? ` <span class="diff ${deltaClass(p.comments_delta)}">(${commentsDelta})</span>` : ""}</span></span>
+        <span class="foot"><span class="comments">💬 ${p.comments_last ?? '–'}${commentsDelta ? ` <span class="diff ${deltaClass(p.comments_delta)}">(${commentsDelta})</span>` : ''}</span></span>
       </div>
     </article>
   </div>
