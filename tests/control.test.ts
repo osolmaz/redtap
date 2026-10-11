@@ -8,7 +8,7 @@ const vendorState = vi.hoisted((): { current: unknown; failNext: boolean } => ({
   failNext: false,
 }));
 
-vi.mock('../extension/lib/vendor/index.mjs', () => ({
+vi.mock('../extension/src/lib/vendor/index.mjs', () => ({
   downloadFile: (): Promise<Blob | null> => {
     if (vendorState.failNext) {
       vendorState.failNext = false;

@@ -1,14 +1,6 @@
-import { fileURLToPath } from 'node:url';
 import { defineConfig } from 'vitest/config';
 
-// the vendored hub lives outside src; resolve the source-relative specifier
-// onto the physical bundle so tests can mock it
-const vendoredHub = fileURLToPath(new URL('./extension/lib/vendor/index.mjs', import.meta.url));
-
 export default defineConfig({
-  resolve: {
-    alias: [{ find: './vendor/index.mjs', replacement: vendoredHub }],
-  },
   test: {
     include: ['tests/**/*.test.ts'],
     testTimeout: 30000,

@@ -1,5 +1,6 @@
 space/
 extension/lib/
+extension/src/lib/vendor/
 node_modules/
 dist
 dist-base/

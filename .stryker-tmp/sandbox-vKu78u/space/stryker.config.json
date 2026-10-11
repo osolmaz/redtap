@@ -1,0 +1,10 @@
+{
+  "$schema": "https://raw.githubusercontent.com/stryker-mutator/stryker-js/master/packages/api/schema/stryker-schema.json",
+  "testRunner": "vitest",
+  "mutate": ["src/record-store.ts"],
+  "coverageAnalysis": "perTest",
+  "timeoutMS": 20000,
+  "concurrency": 4,
+  "reporters": ["clear-text"],
+  "thresholds": { "high": 40, "low": 25, "break": 20 }
+}

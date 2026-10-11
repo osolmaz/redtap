@@ -1,0 +1,37 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <link rel="stylesheet" href="popup.css" />
+  </head>
+  <body>
+    <div class="container">
+      <h1>redtap</h1>
+      <div id="status" class="status disconnected"></div>
+      <div class="stats">
+        <div class="stat">
+          <span class="stat-value" id="observations-count">0</span>
+          <span class="stat-label">Observations</span>
+        </div>
+        <div class="stat">
+          <span class="stat-value" id="unique-count">0</span>
+          <span class="stat-label">Unique posts</span>
+        </div>
+        <div class="stat">
+          <span class="stat-value" id="subreddit-count">0</span>
+          <span class="stat-label">Subreddits</span>
+        </div>
+      </div>
+      <div id="current" class="current"></div>
+      <button id="export" class="primary-btn">Export JSONL</button>
+      <button id="export-all" class="sync-btn">Export all observations (momentum)</button>
+      <div id="export-status" class="status" style="display: none"></div>
+      <div class="pool-section">
+        <div class="settings-label">Pool sync</div>
+        <div id="pool-status" class="status"></div>
+        <button id="pool-sync-now">Sync now</button>
+      </div>
+    </div>
+    <script src="popup.js"></script>
+  </body>
+</html>

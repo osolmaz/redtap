@@ -22,6 +22,8 @@ typescript:
         reason: captured third-party fixtures, not project code
       - pattern: 'extension/lib/**'
         reason: tsc-emitted output and the vendored hub bundle
+      - pattern: 'extension/src/lib/vendor/**'
+        reason: vendored hub bundle, not project code
   dependency_boundaries:
     # the extension core may only import its own lib layer
     - from: extension/src

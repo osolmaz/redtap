@@ -13,6 +13,8 @@ export default tseslint.config(
       'builder/dist/**',
       'coverage/**',
       'extension/lib/**',
+      'extension/src/lib/vendor/**',
+      'scripts/**',
       'extension/*.js',
       'space/**',
       'node_modules/**',

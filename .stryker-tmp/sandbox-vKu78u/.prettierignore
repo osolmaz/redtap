@@ -1,0 +1,8 @@
+space/
+extension/lib/
+node_modules/
+dist
+dist-base/
+coverage/
+builder/dist/
+pnpm-lock.yaml

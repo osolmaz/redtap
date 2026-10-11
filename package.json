@@ -5,7 +5,7 @@
   "type": "module",
   "description": "Passively captures Reddit posts as you browse, archives them to a private HF bucket, and serves them as a feed",
   "scripts": {
-    "build": "npm run build:ext",
+    "build": "node scripts/build-extension.mjs",
     "build:ext": "tsc -p extension/tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p space/tsconfig.json --noEmit",
     "lint": "eslint .",
@@ -31,6 +31,7 @@
     "@types/chrome": "^0.1.0",
     "@types/node": "^22.0.0",
     "@vitest/coverage-v8": "^3.0.0",
+    "esbuild": "^0.28.2",
     "eslint": "^9.0.0",
     "prettier": "^3.0.0",
     "typescript": "^5.0.0",
