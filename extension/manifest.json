@@ -3,13 +3,7 @@
   "name": "redtap",
   "version": "0.2.1",
   "description": "Passively captures Reddit posts as you browse and saves them locally as JSONL",
-  "permissions": [
-    "alarms",
-    "debugger",
-    "downloads",
-    "storage",
-    "unlimitedStorage"
-  ],
+  "permissions": ["alarms", "debugger", "downloads", "storage", "unlimitedStorage"],
   "host_permissions": [
     "*://*.reddit.com/*",
     "https://*.hf.space/*",
@@ -30,12 +24,8 @@
   },
   "content_scripts": [
     {
-      "matches": [
-        "*://*.reddit.com/*"
-      ],
-      "js": [
-        "content.js"
-      ],
+      "matches": ["*://*.reddit.com/*"],
+      "js": ["content.js"],
       "run_at": "document_idle"
     }
   ],
