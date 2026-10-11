@@ -1,6 +1,6 @@
 // redtap service worker: local capture store, unique-post export, and the
 // Infinite Feed Scroller scrape bridge (xtap-scrape-v1 protocol).
-console.log('[redtap-bg] fresh module load, manifest 0.2.0, ingest build');
+console.log('[redtap-bg] fresh module load, manifest', chrome.runtime.getManifest().version + ', ingest build');
 import { z } from 'zod';
 import {
   observationId,
