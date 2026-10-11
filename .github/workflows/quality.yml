@@ -19,6 +19,8 @@ jobs:
           node-version: 22
           cache: pnpm
       - run: pnpm install --frozen-lockfile
+      - run: pnpm install --frozen-lockfile
+        working-directory: space
       - run: pnpm exec prettier --check .
       - run: pnpm exec eslint .
       - run: pnpm exec tsc -p tsconfig.json --noEmit
