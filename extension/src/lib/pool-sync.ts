@@ -370,7 +370,11 @@ export async function initPoolSync({
   // every wake would push its deadline out forever and seals would never run.
   // Create it once and let the 120-minute period recur.
   const sealAlarm = await chrome.alarms.get(SEAL_ALARM);
-  if (sealAlarm === undefined) {
+  // Recreate when missing or when its schedule has drifted more than one period
+  // past now (stale registration after cache wipes or a restored profile);
+  // otherwise a healthy recurring alarm would be pushed out on every boot.
+  const drifted = sealAlarm !== undefined && sealAlarm.scheduledTime > Date.now() + 125 * 60_000;
+  if (sealAlarm === undefined || drifted) {
     chrome.alarms.create(SEAL_ALARM, { periodInMinutes: 120, delayInMinutes: 2 }).catch(() => undefined);
   }
   chrome.alarms.onAlarm.addListener((alarm) => {
